@@ -761,12 +761,11 @@
     async function ghApi(path, options){
       const cfg = getConfig();
       if(!cfg || !cfg.owner || !cfg.repo || !cfg.token) throw new Error('GitHub 저장소가 아직 설정되지 않았어요');
-      const res = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/${path}`, Object.assign({
-        headers: Object.assign({
-          'Authorization': `token ${cfg.token}`,
-          'Accept': 'application/vnd.github+json'
-        }, (options && options.headers) || {})
-      }, options || {}));
+      const mergedHeaders = Object.assign({
+        'Authorization': `token ${cfg.token}`,
+        'Accept': 'application/vnd.github+json'
+      }, (options && options.headers) || {});
+      const res = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/${path}`, Object.assign({}, options || {}, { headers: mergedHeaders }));
       return res;
     }
     async function ghGetFile(key){
@@ -3354,16 +3353,6 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     `;
 
     html += `
-      <div class="main-tabs">
-        <div class="main-tab ${mainTab==='dashboard'?'active':''}" onclick="App.setMainTab('dashboard')">📋 현황판</div>
-        <div class="main-tab ${mainTab==='journal'?'active':''}" onclick="App.setMainTab('journal')">📝 업무일지</div>
-        <div class="main-tab ${mainTab==='detail'?'active':''}" onclick="App.setMainTab('detail')" title="제출 마감일 기준으로 정리해서 보여줘요">📂 상세 프로모션 <span class="main-tab-sub">(마감일)</span></div>
-        <div class="main-tab ${mainTab==='gantt'?'active':''}" onclick="App.setMainTab('gantt')" title="마감일이 아니라 프로모션 진행기간(시작~종료) 기준으로 막대를 보여줘요">📅 프로모션 캘린더 <span class="main-tab-sub">(진행기간)</span></div>
-      </div>
-    `;
-
-    if(mainTab === 'dashboard'){
-    html += `
       <div class="stats-row">
         <div class="stat-card stat-card-clickable" onclick="App.jumpToThisWeek()"><div class="stat-num">${thisWeekCount}</div><div class="stat-label">이번주 마감</div></div>
         <div class="stat-card stat-card-clickable" onclick="App.jumpToThisMonth()"><div class="stat-num">${thisMonthCount}</div><div class="stat-label">이번달 마감</div></div>
@@ -3374,6 +3363,16 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       </div>
     `;
 
+    html += `
+      <div class="main-tabs">
+        <div class="main-tab ${mainTab==='dashboard'?'active':''}" onclick="App.setMainTab('dashboard')">📋 현황판</div>
+        <div class="main-tab ${mainTab==='journal'?'active':''}" onclick="App.setMainTab('journal')">📝 업무일지</div>
+        <div class="main-tab ${mainTab==='detail'?'active':''}" onclick="App.setMainTab('detail')" title="제출 마감일 기준으로 정리해서 보여줘요">📂 상세 프로모션 <span class="main-tab-sub">(마감일)</span></div>
+        <div class="main-tab ${mainTab==='gantt'?'active':''}" onclick="App.setMainTab('gantt')" title="마감일이 아니라 프로모션 진행기간(시작~종료) 기준으로 막대를 보여줘요">📅 프로모션 캘린더 <span class="main-tab-sub">(진행기간)</span></div>
+      </div>
+    `;
+
+    if(mainTab === 'dashboard'){
     // 📝 오늘 할 일 — 업무일지(할일/이슈, 연결형 포함)를 현황판에도 그대로 보여줘서
     // 프로모션 현황이랑 개인 할일을 굳이 탭 옮겨다니지 않고 한 화면에서 같이 볼 수 있게 함
     const todayStr0 = todayISO();
