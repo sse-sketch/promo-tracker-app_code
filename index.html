@@ -1922,6 +1922,18 @@
       const min = m[2] ? +m[2] : 0;
       return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
     }
+    // 콜론이나 "시" 없이 숫자만 입력한 경우도 시각으로 인식 — 예: "13" → 13:00, "1330" → 13:30
+    m = s.match(/^(\d{3,4})$/);
+    if(m){
+      const digits = m[1].padStart(4,'0');
+      const h = +digits.slice(0,2), min = +digits.slice(2,4);
+      if(h <= 23 && min <= 59) return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
+    }
+    m = s.match(/^(\d{1,2})$/);
+    if(m){
+      const h = +m[1];
+      if(h <= 23) return `${String(h).padStart(2,'0')}:00`;
+    }
     return s;
   }
   function normalizePeriod(text, referenceYear){
@@ -2348,11 +2360,17 @@
     if(task.linkedType === 'selection') return item.status === 'submitted' && item.selection === 'pending';
     return true;
   }
+  // 연결된 항목이 처리(제출완료 등)돼서 더 이상 유효하지 않게 된 건, 그냥 사라지는 게 아니라
+  // "완료된 것"으로 쳐서 완료 기록에 남게 함 — 프로모션을 제출완료로 바꿨는데 할일 기록만 흔적도 없이
+  // 사라지면 오늘 뭘 처리했는지 나중에 못 알아보는 문제가 있었음
+  function isLinkedTaskEffectivelyDone(task){
+    return !!(task.linkedItemId && items.find(i => i.id === task.linkedItemId) && !isLinkedTaskStillRelevant(task));
+  }
   function tasksForDate(jd, category){
     return journalTasks.filter(t => t.category === category && taskAppliesToDate(t, jd) && !isTaskDoneOnDate(t, jd) && isLinkedTaskStillRelevant(t));
   }
   function doneTasksForDate(jd, category){
-    return journalTasks.filter(t => t.category === category && taskAppliesToDate(t, jd) && isTaskDoneOnDate(t, jd));
+    return journalTasks.filter(t => t.category === category && taskAppliesToDate(t, jd) && (isTaskDoneOnDate(t, jd) || isLinkedTaskEffectivelyDone(t)));
   }
   function wasCompletedOnDate(task, jd){
     if(!task.recurrence) return !!task.done && task.completedDate === jd;
@@ -2376,7 +2394,8 @@
     return task.recurrence.until ? `${base} · ~${task.recurrence.until}까지` : base;
   }
   function journalTaskRowHtml(task, jd, placeholder, accentClass){
-    const done = isTaskDoneOnDate(task, jd);
+    const linkedDone = isLinkedTaskEffectivelyDone(task);
+    const done = isTaskDoneOnDate(task, jd) || linkedDone;
     const recurType = task.recurrence ? task.recurrence.type : 'none';
     const rowClass = `journal-task-row ${done?'is-done':''} ${accentClass||''}`;
     const linkedItem = task.linkedItemId ? items.find(i => i.id === task.linkedItemId) : null;
@@ -2385,9 +2404,11 @@
       const progressText = setupInfo ? `${setupInfo.filter(t=>t.done).length}/${setupInfo.length}` : '';
       const clickAction = task.linkedType === 'setup' ? `App.openSetupPreview('${linkedItem.id}')` : `App.openEdit('${linkedItem.id}')`;
       const ddayInfo = journalLinkedDdayInfo(linkedItem, task.linkedType);
+      // 마감/지난마감 리마인더는 굳이 수정 페이지 안 들어가도, 여기서 바로 "제출완료"로 처리할 수 있게 함
+      const canQuickComplete = !linkedDone && (task.linkedType === 'deadline' || task.linkedType === 'overdue');
       return `
         <div class="${rowClass}">
-          <input type="checkbox" ${(done || journalSelectedIds.has(task.id))?'checked':''} onchange="${done ? `App.toggleJournalTaskDone('${task.id}', '${jd}')` : `App.toggleJournalSelectItem('${task.id}')`}" />
+          <input type="checkbox" ${(done || journalSelectedIds.has(task.id))?'checked':''} ${linkedDone?'disabled title="프로모션 항목 자체를 다시 진행중으로 바꿔야 해요"':''} onchange="${done ? `App.toggleJournalTaskDone('${task.id}', '${jd}')` : `App.toggleJournalSelectItem('${task.id}')`}" />
           <span class="star-toggle ${task.starred?'is-starred':''}" onclick="App.toggleJournalTaskStar('${task.id}')" title="중요 표시">${task.starred?'★':'☆'}</span>
           ${task.time ? `<span class="journal-time-badge">${escapeHtml(task.time)}</span>` : ''}
           <div class="journal-linked-content" onclick="${clickAction}">
@@ -2397,6 +2418,7 @@
             ${progressText ? `<span class="journal-linked-progress">${progressText}</span>` : ''}
             ${ddayInfo ? `<span class="dday-mini dday-${urgencyClass(ddayInfo.n)}" title="${escapeHtml(ddayInfo.label)}">${ddayLabel(ddayInfo.n)}</span>` : ''}
           </div>
+          ${canQuickComplete ? `<span class="icon-btn" title="수정 페이지 안 열고 바로 제출완료 처리" onclick="event.stopPropagation();App.quickMarkItemSubmitted('${linkedItem.id}')">✅</span>` : ''}
           <span class="journal-memo-btn ${task.notes?'has-memo':''}" onclick="event.stopPropagation();App.openTaskMemo('${task.id}')" title="메모">📝</span>
           <span class="setup-task-remove" onclick="App.removeJournalTask('${task.id}')">✕</span>
         </div>
@@ -2727,6 +2749,15 @@
     task.starred = !task.starred;
     persistJournalTasks();
     render();
+  }
+  // 마감 리마인더 옆 ✅ 버튼 — 수정 페이지를 열지 않고 바로 "제출완료"로 표시
+  function quickMarkItemSubmitted(itemId){
+    const item = items.find(i => i.id === itemId);
+    if(!item) return;
+    item.status = 'submitted';
+    persist();
+    render();
+    showToast(`"${item.title || item.content}" 제출완료로 표시했어요`);
   }
   function setJournalTaskRecurrence(id, value){
     const task = journalTasks.find(t => t.id === id);
@@ -5690,6 +5721,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     openTaskCheckAction,
     toggleItemStar,
     toggleJournalTaskStar,
+    quickMarkItemSubmitted,
     setJournalTaskRecurrence,
     toggleJournalTaskRecurCustomDay,
     updateJournalTaskRecurUntil,
