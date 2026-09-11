@@ -450,6 +450,7 @@
   .time-grid-h-block-time{font-weight:800;font-size:10px;opacity:0.85;flex-shrink:0;}
   .time-grid-h-block-label{font-weight:700;overflow:hidden;text-overflow:ellipsis;}
   .time-grid-h-block-star{color:#C9A227;flex-shrink:0;font-size:10px;}
+  .time-grid-h-block.is-deadline-marker{border-style:dashed;border-width:1px;border-left-width:3px;box-shadow:none;}
   .time-grid-block{
     position:absolute;border-radius:9px;padding:5px 9px;overflow:hidden;cursor:pointer;
     font-size:11px;line-height:1.35;box-sizing:border-box;border-left:3px solid transparent;
@@ -2503,16 +2504,23 @@
     const rawTasks = [...tasksForDate(jd, 'todo'), ...tasksForDate(jd, 'issue')].filter(t => !isTaskDoneOnDate(t, jd));
     const blocks = [];
     rawTasks.forEach(t => {
-      const startMin = timeToMinutes(t.time);
+      let startMin = timeToMinutes(t.time);
+      let isDeadlineMarker = false;
+      let linkedItem = t.linkedItemId ? items.find(i => i.id === t.linkedItemId) : null;
+      // 시작 시각을 직접 안 넣었어도, 마감일이 오늘이고 마감 시각(예: 15:00)이 있는 마감 태스크면
+      // 그 시각에 짧은 "마감" 마커로라도 시간표에 보이게 함 — "오늘 3시까지"인데 시간표엔 안 보이던 문제
+      if(startMin === null && linkedItem && (t.linkedType === 'deadline' || t.linkedType === 'overdue') && linkedItem.deadline === jd && linkedItem.deadlineTime){
+        startMin = timeToMinutes(linkedItem.deadlineTime);
+        isDeadlineMarker = startMin !== null;
+      }
       if(startMin === null) return;
-      let endMin = timeToMinutes(t.endTime);
+      let endMin = isDeadlineMarker ? startMin + 20 : timeToMinutes(t.endTime);
       if(endMin === null || endMin <= startMin) endMin = startMin + TIME_GRID_DEFAULT_DURATION;
       const clippedStart = Math.max(startMin, TIME_GRID_START_MIN);
       const clippedEnd = Math.min(endMin, TIME_GRID_END_MIN);
       if(clippedEnd <= TIME_GRID_START_MIN || clippedStart >= TIME_GRID_END_MIN) return; // 시간표 범위 밖
-      const linkedItem = t.linkedItemId ? items.find(i => i.id === t.linkedItemId) : null;
       const label = linkedItem ? (linkedItem.title || linkedItem.content) : (t.text || '(내용 없음)');
-      blocks.push({ task: t, startMin: clippedStart, endMin: Math.max(clippedEnd, clippedStart+12), label, isLinked: !!linkedItem, kind: t.category==='issue' ? 'issue' : (t.taskType||'todo') });
+      blocks.push({ task: t, startMin: clippedStart, endMin: Math.max(clippedEnd, clippedStart+12), label, isLinked: !!linkedItem, isDeadlineMarker, kind: t.category==='issue' ? 'issue' : (t.taskType||'todo') });
     });
     // 일정이 없어도 시간표 축은 항상 고정으로 떠 있게 함 (있다없다 왔다갔다 하지 않게)
     const packed = blocks.length ? packTimeGridLanes(blocks) : [];
@@ -2552,14 +2560,17 @@
         const leftPct = ((b.startMin - half.start) / totalMin) * 100;
         const widthPct = ((b.endMin - b.startMin) / totalMin) * 100;
         const topPx = b._lane * ROW_PX;
-        const kindClass = b.isLinked ? 'time-grid-block-linked' : `time-grid-block-${b.kind}`;
-        const timeLabel = `${normalizeTime(b.task.time)}${b.task.endTime ? '~'+normalizeTime(b.task.endTime) : ''}`;
-        const icon = b.isLinked ? '🎯' : (kindIconMap[b.kind] || '📌');
+        const kindClass = b.isDeadlineMarker ? 'time-grid-block-linked' : (b.isLinked ? 'time-grid-block-linked' : `time-grid-block-${b.kind}`);
+        const minutesToLabel = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+        const timeLabel = b.isDeadlineMarker
+          ? `마감 ${minutesToLabel(b.startMin)}`
+          : `${normalizeTime(b.task.time)}${b.task.endTime ? '~'+normalizeTime(b.task.endTime) : ''}`;
+        const icon = b.isDeadlineMarker ? '⏰' : (b.isLinked ? '🎯' : (kindIconMap[b.kind] || '📌'));
         const durationMin = b.endMin - b.startMin;
         const compact = durationMin < 45;
         const starHtml = b.task.starred ? `<span class="time-grid-h-block-star" title="중요 표시">★</span>` : '';
         const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(timeLabel)} ${escapeHtml(b.label)}${b.task.notes ? ' — ' + escapeHtml(b.task.notes) : ''}`;
-        return `<div class="time-grid-h-block ${kindClass} ${compact?'is-compact':''}" style="left:${leftPct}%;width:calc(${widthPct}% - 3px);top:${topPx}px;height:${ROW_PX-4}px;" onclick="${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
+        return `<div class="time-grid-h-block ${kindClass} ${compact?'is-compact':''} ${b.isDeadlineMarker?'is-deadline-marker':''}" style="left:${leftPct}%;width:calc(${widthPct}% - 3px);top:${topPx}px;height:${ROW_PX-4}px;" onclick="${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
           ${compact ? `<span>${icon}</span>${starHtml}` : `${starHtml}<span class="time-grid-h-block-time">${icon} ${escapeHtml(timeLabel)}</span><span class="time-grid-h-block-label">${escapeHtml(b.label)}</span>`}
         </div>`;
       }).join('');
