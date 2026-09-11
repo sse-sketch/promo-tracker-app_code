@@ -435,6 +435,8 @@
   .time-grid-h-tick{position:absolute;top:0;bottom:-6px;border-left:1px dashed var(--line);}
   .time-grid-h-tick-label{position:absolute;top:-3px;font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);white-space:nowrap;}
   .time-grid-h-track{position:relative;}
+  .time-grid-h-lunch{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(135deg,rgba(136,135,128,0.10),rgba(136,135,128,0.10) 6px,rgba(136,135,128,0.04) 6px,rgba(136,135,128,0.04) 12px);border-left:1px dashed var(--ink-faint);border-right:1px dashed var(--ink-faint);z-index:0;}
+  .time-grid-h-lunch-label{position:absolute;top:2px;left:4px;font-size:9.5px;color:var(--ink-faint);white-space:nowrap;}
   .time-grid-h-now{position:absolute;top:0;bottom:0;width:0;border-left:2px solid var(--urgent);z-index:5;}
   .time-grid-now-dot{position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:50%;background:var(--urgent);box-shadow:0 0 0 3px rgba(175,74,65,0.18);}
   .time-grid-h-block{
@@ -2153,10 +2155,17 @@
     try{ await AppStorage.set(CHANNELS_ENDED_KEY, JSON.stringify(endedChannels), false); }catch(e){}
   }
   async function loadItems(){
+    // 5개 파일을 순서대로 하나씩 기다리는 대신 한 번에 같이 요청 — 로딩 시간이 5배 가까이 줄어듦
+    const [itemsRes, chRes, ecRes, jRes, jtRes] = await Promise.all([
+      AppStorage.get(STORAGE_KEY, false).catch(() => null),
+      AppStorage.get(CHANNELS_KEY, false).catch(() => null),
+      AppStorage.get(CHANNELS_ENDED_KEY, false).catch(() => null),
+      AppStorage.get(JOURNAL_KEY, false).catch(() => null),
+      AppStorage.get(JOURNAL_TASKS_KEY, false).catch(() => null)
+    ]);
     try{
-      const res = await AppStorage.get(STORAGE_KEY, false);
-      if(res && res.value){
-        items = JSON.parse(res.value);
+      if(itemsRes && itemsRes.value){
+        items = JSON.parse(itemsRes.value);
       }else{
         items = SEED_ITEMS.slice();
         await AppStorage.set(STORAGE_KEY, JSON.stringify(items), false);
@@ -2165,7 +2174,6 @@
       items = SEED_ITEMS.slice();
     }
     try{
-      const chRes = await AppStorage.get(CHANNELS_KEY, false);
       if(chRes && chRes.value){
         managedChannels = JSON.parse(chRes.value);
       }else{
@@ -2176,19 +2184,16 @@
       managedChannels = Object.keys(CHANNEL_COLOR_MAP);
     }
     try{
-      const ecRes = await AppStorage.get(CHANNELS_ENDED_KEY, false);
       endedChannels = (ecRes && ecRes.value) ? JSON.parse(ecRes.value) : [];
     }catch(e){
       endedChannels = [];
     }
     try{
-      const jRes = await AppStorage.get(JOURNAL_KEY, false);
       if(jRes && jRes.value) journalEntries = JSON.parse(jRes.value);
     }catch(e){
       journalEntries = {};
     }
     try{
-      const jtRes = await AppStorage.get(JOURNAL_TASKS_KEY, false);
       if(jtRes && jtRes.value) journalTasks = JSON.parse(jtRes.value);
     }catch(e){
       journalTasks = [];
@@ -2461,6 +2466,9 @@
   const TIME_GRID_START_MIN = 7 * 60;   // 07:00
   const TIME_GRID_END_MIN = 22 * 60;    // 22:00
   const TIME_GRID_DEFAULT_DURATION = 30; // 종료시각 없으면 30분짜리 블록으로 표시
+  // 점심시간 — 달마다 바뀔 수 있어서 여기 숫자만 바꾸면 돼요 (지금은 12:00~13:00)
+  const LUNCH_START_MIN = 12 * 60;
+  const LUNCH_END_MIN = 13 * 60;
   function timeToMinutes(t){
     const norm = normalizeTime(t);
     if(!norm) return null;
@@ -2535,6 +2543,11 @@
       }).join('');
       const nowLineHtml = (nowMin !== null && nowMin >= half.start && nowMin <= half.end)
         ? `<div class="time-grid-h-now" style="left:${((nowMin-half.start)/totalMin)*100}%;"><span class="time-grid-now-dot"></span></div>` : '';
+      const lunchStart = Math.max(LUNCH_START_MIN, half.start);
+      const lunchEnd = Math.min(LUNCH_END_MIN, half.end);
+      const lunchHtml = (lunchEnd > lunchStart)
+        ? `<div class="time-grid-h-lunch" style="left:${((lunchStart-half.start)/totalMin)*100}%;width:${((lunchEnd-lunchStart)/totalMin)*100}%;" title="점심시간 ${normalizeTime(String(Math.floor(LUNCH_START_MIN/60)).padStart(2,'0')+':'+String(LUNCH_START_MIN%60).padStart(2,'0'))}~${normalizeTime(String(Math.floor(LUNCH_END_MIN/60)).padStart(2,'0')+':'+String(LUNCH_END_MIN%60).padStart(2,'0'))}"><span class="time-grid-h-lunch-label">🍚 점심</span></div>`
+        : '';
       const eventsHtml = halfBlocks.map(b => {
         const leftPct = ((b.startMin - half.start) / totalMin) * 100;
         const widthPct = ((b.endMin - b.startMin) / totalMin) * 100;
@@ -2554,7 +2567,7 @@
         <div class="time-grid-h-half">
           <div class="time-grid-h-half-label">${half.label}</div>
           <div class="time-grid-h-axis">${ticksHtml}</div>
-          <div class="time-grid-h-track" style="height:${laneCount*ROW_PX}px;">${nowLineHtml}${eventsHtml}</div>
+          <div class="time-grid-h-track" style="height:${laneCount*ROW_PX}px;">${lunchHtml}${nowLineHtml}${eventsHtml}</div>
         </div>
       `;
     }
@@ -2834,8 +2847,18 @@
   }
   async function refreshNow(){
     try{
-      const res = await AppStorage.get(STORAGE_KEY, false);
-      if(res && res.value) items = JSON.parse(res.value);
+      const [itemsRes, chRes, ecRes, jRes, jtRes] = await Promise.all([
+        AppStorage.get(STORAGE_KEY, false).catch(() => null),
+        AppStorage.get(CHANNELS_KEY, false).catch(() => null),
+        AppStorage.get(CHANNELS_ENDED_KEY, false).catch(() => null),
+        AppStorage.get(JOURNAL_KEY, false).catch(() => null),
+        AppStorage.get(JOURNAL_TASKS_KEY, false).catch(() => null)
+      ]);
+      if(itemsRes && itemsRes.value) items = JSON.parse(itemsRes.value);
+      if(chRes && chRes.value) managedChannels = JSON.parse(chRes.value);
+      if(ecRes && ecRes.value) endedChannels = JSON.parse(ecRes.value);
+      if(jRes && jRes.value) journalEntries = JSON.parse(jRes.value);
+      if(jtRes && jtRes.value) journalTasks = JSON.parse(jtRes.value);
     }catch(e){
       // ignore — just re-render with whatever is in memory
     }
