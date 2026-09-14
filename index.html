@@ -1564,6 +1564,21 @@
     topMenuOpen = false;
     render();
   }
+  // 새로고침(브라우저 리로드)해도 보고 있던 탭/날짜로 돌아오게 — 이게 없으면 매번 현황판으로 리셋됐음
+  const VIEW_STATE_KEY = 'promo-tracker-view-state';
+  function saveViewState(){
+    try{ localStorage.setItem(VIEW_STATE_KEY, JSON.stringify({ mainTab, journalDate, journalViewMode })); }catch(e){}
+  }
+  function restoreViewState(){
+    try{
+      const raw = localStorage.getItem(VIEW_STATE_KEY);
+      if(!raw) return;
+      const s = JSON.parse(raw);
+      if(s.mainTab) mainTab = s.mainTab;
+      if(s.journalDate) journalDate = s.journalDate;
+      if(s.journalViewMode) journalViewMode = s.journalViewMode;
+    }catch(e){}
+  }
   let journalEntries = {}; // { 'YYYY-MM-DD': { did:[] } } — '오늘 한 일'만 날짜별 로그
   let journalTasks = []; // [{id, text, category:'todo'|'issue', recurrence:null|{type:'daily'}|{type:'weekly',dow}|{type:'monthly',day}, done, doneDates:{'YYYY-MM-DD':true}, createdDate}]
   let journalDate = todayISO();
@@ -2087,9 +2102,11 @@
 
   let toastMsg = '';
   let saveStatus = 'idle'; // 'idle' | 'saving' | 'saved' | 'failed' — 우측 상단에 표시, 실패 시엔 확실히 눈에 띄게(색 강조 + 안 사라짐)
+  let saveStatusLabel = ''; // 뭘 저장하다 실패했는지(예: '업무 기록', '프로모션 항목') — 실패 배지에 같이 보여줌
   let saveStatusTimer = null;
-  function setSaveStatus(status){
+  function setSaveStatus(status, label){
     saveStatus = status;
+    if(label !== undefined) saveStatusLabel = label;
     if(saveStatusTimer) clearTimeout(saveStatusTimer);
     render();
     if(status === 'saved'){
@@ -2255,7 +2272,7 @@
   }
   async function persistJournal(attempt){
     attempt = attempt || 1;
-    if(attempt === 1) setSaveStatus('saving');
+    if(attempt === 1) setSaveStatus('saving', '오늘 한 일');
     try{
       await AppStorage.set(JOURNAL_KEY, JSON.stringify(journalEntries), false);
       setSaveStatus('saved');
@@ -2263,14 +2280,14 @@
       if(attempt < 3){
         setTimeout(() => persistJournal(attempt + 1), attempt * 1200);
       }else{
-        setSaveStatus('failed');
+        setSaveStatus('failed', '오늘 한 일');
         showToast('업무일지 저장에 실패했어요 — 새로고침 후 다시 시도해보세요');
       }
     }
   }
   async function persistJournalTasks(attempt){
     attempt = attempt || 1;
-    if(attempt === 1) setSaveStatus('saving');
+    if(attempt === 1) setSaveStatus('saving', '할일/팔로우업');
     try{
       await AppStorage.set(JOURNAL_TASKS_KEY, JSON.stringify(journalTasks), false);
       setSaveStatus('saved');
@@ -2279,7 +2296,7 @@
         // 일시적인 통신 문제나 레이트리밋일 수 있으니 점점 간격을 늘려가며 재시도
         setTimeout(() => persistJournalTasks(attempt + 1), attempt * 1200);
       }else{
-        setSaveStatus('failed');
+        setSaveStatus('failed', '할일/팔로우업');
         showToast('할일/팔로우업 저장에 실패했어요 — 새로고침 후 다시 시도해보세요');
       }
     }
@@ -2941,7 +2958,7 @@
   }
   async function persist(attempt){
     attempt = attempt || 1;
-    if(attempt === 1) setSaveStatus('saving');
+    if(attempt === 1) setSaveStatus('saving', '프로모션 항목');
     try{
       await AppStorage.set(STORAGE_KEY, JSON.stringify(items), false);
       loadError = false;
@@ -2951,7 +2968,7 @@
         setTimeout(() => persist(attempt + 1), attempt * 1200);
       }else{
         loadError = true;
-        setSaveStatus('failed');
+        setSaveStatus('failed', '프로모션 항목');
         render();
       }
     }
@@ -3473,8 +3490,8 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       render();
       return;
     }
-    if(!f.deadline && !f.needsRecheck){
-      modalState.parseError = '제출 마감일은 꼭 입력해주세요 (아직 정해지지 않았으면 "재확인 필요"를 체크하고 비워두세요).';
+    if((!f.status || f.status === 'pending') && !f.deadline && !f.needsRecheck){
+      modalState.parseError = '제출 마감일은 꼭 입력해주세요 (아직 정해지지 않았으면 "재확인 필요"를 체크하고 비워두세요). 이미 끝난 건이면 위 "상태"를 대기중이 아닌 값으로 바꿔주세요.';
       render();
       return;
     }
@@ -3776,6 +3793,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
   }
 
   function render(){
+    saveViewState();
     const app = document.getElementById('app');
     const searchEl = document.getElementById('searchInput');
     const searchWasFocused = searchEl && document.activeElement === searchEl;
@@ -4921,11 +4939,12 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
           <div class="modal">
             <h2 class="modal-title">${modalState.mode==='add' ? (modalState.tab==='review' ? '추출된 내용 확인' : '새 항목 등록') : '공지 수정'}</h2>
       `;
-      if(modalState.mode === 'add' && modalState.tab !== 'review' && AppStorage.hasNative()){
+      if(modalState.mode === 'add' && modalState.tab !== 'review'){
         html += `
           <div class="tabs">
-            <div class="tab ${modalState.tab==='paste'?'active':''}" onclick="App.setTab('paste')">붙여넣기로 자동 정리</div>
+            ${AppStorage.hasNative() ? `<div class="tab ${modalState.tab==='paste'?'active':''}" onclick="App.setTab('paste')">붙여넣기로 자동 정리</div>` : ''}
             <div class="tab ${modalState.tab==='manual'?'active':''}" onclick="App.setTab('manual')">직접 입력</div>
+            <div class="tab ${modalState.tab==='jsonImport'?'active':''}" onclick="App.setTab('jsonImport')">가져오기</div>
           </div>
         `;
       }
@@ -5059,11 +5078,23 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
             <button class="btn btn-primary" ${modalState.parsing || !aiAvailable ?'disabled':''} onclick="App.parseNow()" title="${aiAvailable ? '' : 'Claude 아티팩트에서만 사용 가능해요'}">자동으로 채우기</button>
           </div>
         `;
+      }else if(modalState.mode === 'add' && modalState.tab === 'jsonImport'){
+        html += `
+          <div class="hint" style="margin-bottom:12px;">Claude 아티팩트(대화창)나 파싱 스킬로 정리해둔 백업 JSON을 여기에 그대로 붙여넣으면, 기존 데이터는 그대로 두고 겹치지 않는 것만 병합돼요.</div>
+          <div class="field">
+            <label>백업 JSON 붙여넣기</label>
+            <textarea placeholder='{"items":[...],"journalEntries":{},"journalTasks":[...]}' style="min-height:160px;font-family:var(--mono);font-size:11.5px;" oninput="App.updateBackupImportText(this.value)">${escapeHtml(backupImportText)}</textarea>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="App.closeModal()">취소</button>
+            <button class="btn btn-primary" ${backupImportText.trim() ? '' : 'disabled'} onclick="App.restoreBackup('merge');App.closeModal();">병합해서 추가</button>
+          </div>
+        `;
       }else{
         html += `
           ${(modalState.mode === 'add' && !AppStorage.hasNative()) ? `
             <div class="hint" style="background:var(--brand-soft);color:var(--brand);padding:10px 12px;border-radius:8px;margin-bottom:14px;">
-              💡 텍스트만 붙여넣으면 자동으로 정리해주는 기능은 <b>Claude 아티팩트(대화창 안)</b>에서 쓸 수 있어요. 거기서 정리한 다음 "백업"으로 여기로 가져오시면 돼요.
+              💡 텍스트만 붙여넣으면 자동으로 정리해주는 기능은 <b>Claude 아티팩트(대화창 안)</b>에서 쓸 수 있어요. 거기서 정리한 다음 "가져오기" 탭으로 붙여넣으시면 돼요.
             </div>
           ` : ''}
           <div class="field">
@@ -5627,8 +5658,9 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     }
 
     if(saveStatus !== 'idle'){
-      const label = saveStatus === 'saving' ? '저장 중...' : saveStatus === 'saved' ? '✓ 저장됨' : '⚠ 저장 실패';
-      html += `<div class="save-status-badge save-status-${saveStatus}">${label}</div>`;
+      const what = saveStatusLabel ? ` (${escapeHtml(saveStatusLabel)})` : '';
+      const label = saveStatus === 'saving' ? `저장 중${what}...` : saveStatus === 'saved' ? '✓ 저장됨' : `⚠ 저장 실패${what}`;
+      html += `<div class="save-status-badge save-status-${saveStatus}" ${saveStatus==='failed' && saveStatusLabel ? `title="${escapeHtml(saveStatusLabel)} 저장에 실패했어요. 새로고침 후 다시 시도해보세요."` : ''}>${label}</div>`;
     }
 
     app.innerHTML = html;
@@ -5836,6 +5868,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     refreshNow
   };
 
+  restoreViewState();
   loadItems();
   setInterval(() => { render(); }, 60000); // refresh once per minute so D-DAY countdowns stay current; set once here, never re-created
 
