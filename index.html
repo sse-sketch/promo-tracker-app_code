@@ -428,33 +428,30 @@
   .journal-did-bullet{color:var(--ink-faint);font-weight:800;flex-shrink:0;}
   .journal-did-row input{flex:1;min-width:0;border:none;background:transparent;font-family:var(--sans);font-size:13.5px;color:var(--ink);padding:4px 0;}
   .journal-did-row input:focus{outline:none;border-bottom:1px solid var(--brand);}
-  .time-grid-h-wrap{position:relative;border:1px solid var(--line);border-radius:12px;padding:10px 12px 12px;background:linear-gradient(180deg,#FAFAF7,#FFFFFF);}
-  .time-grid-h-half{margin-bottom:14px;}
-  .time-grid-h-half:last-child{margin-bottom:0;}
-  .time-grid-h-half-label{font-size:11px;font-weight:700;color:var(--ink-faint);margin-bottom:4px;}
-  .time-grid-h-axis{position:relative;height:16px;border-bottom:1px solid var(--line);margin-bottom:8px;}
-  .time-grid-h-tick{position:absolute;top:0;bottom:-6px;border-left:1px dashed var(--line);}
-  .time-grid-h-tick-label{position:absolute;top:-3px;font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);white-space:nowrap;}
-  .time-grid-h-track{position:relative;}
-  .time-grid-h-lunch{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(135deg,rgba(136,135,128,0.10),rgba(136,135,128,0.10) 6px,rgba(136,135,128,0.04) 6px,rgba(136,135,128,0.04) 12px);border-left:1px dashed var(--ink-faint);border-right:1px dashed var(--ink-faint);z-index:0;}
-  .time-grid-h-lunch-label{position:absolute;top:2px;left:4px;font-size:9.5px;color:var(--ink-faint);white-space:nowrap;}
-  .time-grid-h-now{position:absolute;top:0;bottom:0;width:0;border-left:2px solid var(--urgent);z-index:5;}
+  .time-grid-v-wrap{display:grid;grid-template-columns:1fr 1fr;gap:14px;border:1px solid var(--line);border-radius:12px;padding:10px 12px 12px;background:linear-gradient(180deg,#FAFAF7,#FFFFFF);}
+  @media (max-width:480px){ .time-grid-v-wrap{grid-template-columns:1fr;} }
+  .time-grid-h-half-label{font-size:11px;font-weight:700;color:var(--ink-faint);margin-bottom:6px;}
+  .time-grid-v-hours{width:42px;flex-shrink:0;position:relative;}
+  .time-grid-v-hour-row{border-top:1px dashed var(--line);position:relative;}
+  .time-grid-v-hour-label{position:absolute;top:-7px;left:0;font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);}
+  .time-grid-v-track{flex:1;position:relative;}
+  .time-grid-v-lunch{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,rgba(136,135,128,0.10),rgba(136,135,128,0.10) 6px,rgba(136,135,128,0.04) 6px,rgba(136,135,128,0.04) 12px);border-top:1px dashed var(--ink-faint);border-bottom:1px dashed var(--ink-faint);z-index:0;}
+  .time-grid-v-lunch-label{position:absolute;top:2px;left:4px;font-size:9.5px;color:var(--ink-faint);white-space:nowrap;}
+  .time-grid-v-now{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--urgent);z-index:5;}
   .time-grid-now-dot{position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:50%;background:var(--urgent);box-shadow:0 0 0 3px rgba(175,74,65,0.18);}
-  .time-grid-h-block{
-    position:absolute;border-radius:7px;padding:2px 8px;overflow:hidden;cursor:pointer;
-    font-size:10.5px;line-height:1.3;box-sizing:border-box;border-left:3px solid transparent;
+  .time-grid-v-block{
+    position:absolute;border-radius:7px;padding:4px 8px;overflow:hidden;cursor:pointer;
+    font-size:10.5px;line-height:1.25;box-sizing:border-box;border-left:3px solid transparent;
     box-shadow:0 2px 5px -2px rgba(35,46,41,0.16);transition:transform .12s ease, box-shadow .12s ease;
-    display:flex;align-items:center;gap:6px;white-space:nowrap;
   }
-  .time-grid-h-block:hover{transform:translateY(-1px);box-shadow:0 5px 12px -3px rgba(35,46,41,0.26);z-index:3;}
-  .time-grid-h-block.is-compact{justify-content:center;align-items:center;padding:2px;font-size:12px;}
-  .time-grid-h-block-time{font-weight:800;font-size:10.5px;opacity:0.85;flex-shrink:0;}
-  .time-grid-h-block-icon{flex-shrink:0;font-size:11px;}
-  .time-grid-h-block-label{font-weight:700;font-size:10.5px;overflow:hidden;text-overflow:ellipsis;}
+  .time-grid-v-block:hover{transform:translateY(-1px);box-shadow:0 5px 12px -3px rgba(35,46,41,0.26);z-index:3;}
+  .time-grid-v-block.is-deadline-marker{border-style:dashed;border-width:1px;border-left-width:3px;box-shadow:none;}
+  .time-grid-v-block-top{display:flex;align-items:center;gap:5px;}
+  .time-grid-v-block-time{font-weight:800;font-size:10px;opacity:0.8;}
+  .time-grid-v-block-label{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;}
   .time-grid-h-block-channel{font-weight:600;opacity:0.7;}
-  .time-grid-h-block-extends{margin-left:auto;flex-shrink:0;font-weight:700;font-size:9.5px;opacity:0.65;}
-  .time-grid-h-block-star{color:#C9A227;flex-shrink:0;font-size:10px;}
-  .time-grid-h-block.is-deadline-marker{border-style:dashed;border-width:1px;border-left-width:3px;box-shadow:none;}
+  .time-grid-h-block-extends{display:block;margin-top:2px;font-weight:700;font-size:9.5px;opacity:0.65;}
+  .time-grid-h-block-star{color:#C9A227;flex-shrink:0;font-size:10px;margin-left:auto;}
   .time-grid-block{
     position:absolute;border-radius:9px;padding:5px 9px;overflow:hidden;cursor:pointer;
     font-size:11px;line-height:1.35;box-sizing:border-box;border-left:3px solid transparent;
@@ -2581,9 +2578,10 @@
     });
     // 일정이 없어도 시간표 축은 항상 고정으로 떠 있게 함 (있다없다 왔다갔다 하지 않게)
     const packed = blocks.length ? packTimeGridLanes(blocks) : [];
-    const ROW_PX = 32;
-    // 가로 스크롤 대신 오전/오후 두 줄로 나눠서 보여줌 — 점심시간이 매달 조금씩 달라도 큰 상관 없이
-    // 그냥 14시를 기준으로 고정 분할함 (필요하면 이 기준 시각은 언제든 조정 가능)
+    // 세로형 + 오전/오후 2열 — 세로 길이는 하루 전체를 한 줄로 그리는 것보다 절반으로 줄이면서,
+    // (가로형과 달리) 블록 폭은 항상 "열 전체 너비"라 제목이 시간 위치 때문에 좁아지는 일이 없음.
+    // 14시를 기준으로 고정 분할하고(점심시간과 무관), 시간 눈금은 1시간 단위로 촘촘하게 보여줌
+    const HOUR_PX_V = 34;
     const SPLIT_MIN = 14 * 60;
     const halves = [
       { label: '오전', start: TIME_GRID_START_MIN, end: SPLIT_MIN },
@@ -2593,6 +2591,7 @@
     const kindIconMap = { todo:'📌', issue:'👀', meeting:'🗣️', proposal:'💡', call:'📞', review:'📋' };
     function renderHalf(half){
       const totalMin = half.end - half.start;
+      const colHeight = (totalMin / 60) * HOUR_PX_V;
       // 겹치는 구간이 있으면 양쪽 다 보여주되(하나의 일정이 이어진다는 걸 알 수 있게), 각 조각에 어느 쪽으로
       // 이어지는지 화살표(◂/▸)를 붙여서 "잘린 반쪽"이 아니라 "이어지는 한 일정의 일부"로 읽히게 함
       const halfBlocks = packed
@@ -2605,42 +2604,31 @@
         }));
       const laneCount = halfBlocks.length ? Math.max(...halfBlocks.map(b => b._laneCount)) : 1;
       const startHour = half.start / 60, endHour = half.end / 60;
-      const hourTicks = [];
-      for(let h = startHour; h <= endHour; h++) hourTicks.push(h);
-      const ticksHtml = hourTicks.map(h => {
-        const leftPct = ((h*60 - half.start) / totalMin) * 100;
-        const isLast = h === endHour;
-        const labelStyle = isLast ? 'left:auto;right:0;text-align:right;' : 'left:2px;';
-        return `<div class="time-grid-h-tick" style="left:${leftPct}%;"><span class="time-grid-h-tick-label" style="${labelStyle}">${String(h).padStart(2,'0')}:00</span></div>`;
-      }).join('');
+      const hourRows = [];
+      for(let h = startHour; h < endHour; h++) hourRows.push(h);
+      const hourLabelsHtml = hourRows.map(h => `<div class="time-grid-v-hour-row" style="height:${HOUR_PX_V}px;"><span class="time-grid-v-hour-label">${String(h).padStart(2,'0')}:00</span></div>`).join('')
+        + `<span class="time-grid-v-hour-label" style="position:absolute;top:${colHeight}px;">${String(endHour).padStart(2,'0')}:00</span>`;
       const nowLineHtml = (nowMin !== null && nowMin >= half.start && nowMin <= half.end)
-        ? `<div class="time-grid-h-now" style="left:${((nowMin-half.start)/totalMin)*100}%;"><span class="time-grid-now-dot"></span></div>` : '';
+        ? `<div class="time-grid-v-now" style="top:${((nowMin-half.start)/totalMin)*colHeight}px;"><span class="time-grid-now-dot"></span></div>` : '';
       const lunchStart = Math.max(LUNCH_START_MIN, half.start);
       const lunchEnd = Math.min(LUNCH_END_MIN, half.end);
       const lunchHtml = (lunchEnd > lunchStart)
-        ? `<div class="time-grid-h-lunch" style="left:${((lunchStart-half.start)/totalMin)*100}%;width:${((lunchEnd-lunchStart)/totalMin)*100}%;" title="점심시간 ${normalizeTime(String(Math.floor(LUNCH_START_MIN/60)).padStart(2,'0')+':'+String(LUNCH_START_MIN%60).padStart(2,'0'))}~${normalizeTime(String(Math.floor(LUNCH_END_MIN/60)).padStart(2,'0')+':'+String(LUNCH_END_MIN%60).padStart(2,'0'))}"><span class="time-grid-h-lunch-label">🍚 점심</span></div>`
+        ? `<div class="time-grid-v-lunch" style="top:${((lunchStart-half.start)/totalMin)*colHeight}px;height:${((lunchEnd-lunchStart)/totalMin)*colHeight}px;"><span class="time-grid-v-lunch-label">🍚 점심</span></div>`
         : '';
       const eventsHtml = halfBlocks.map(b => {
-        let leftPct = ((b.startMin - half.start) / totalMin) * 100;
-        let widthPct = ((b.endMin - b.startMin) / totalMin) * 100;
-        // 우측 경계를 넘어가지 않게 폭을 잘라내고, 너무 짧은 블록도 최소 폭은 보장 — 그렇지 않으면
-        // 트랙 끝(22:00)에 딱 붙은 일정이 테두리만 삐죽 잘려 보이는 문제가 있었음
-        leftPct = Math.max(0, Math.min(leftPct, 100));
-        widthPct = Math.max(widthPct, 2.5);
-        if(leftPct + widthPct > 100) widthPct = 100 - leftPct;
-        const topPx = b._lane * ROW_PX;
+        const topPx = ((b.startMin - half.start) / totalMin) * colHeight;
+        let heightPx = ((b.endMin - b.startMin) / totalMin) * colHeight;
+        heightPx = Math.max(heightPx, 20); // 너무 짧은 블록도 최소 높이는 보장
+        const widthPct = 100 / b._laneCount;
+        const leftPct = b._lane * widthPct;
         const kindClass = b.isDeadlineMarker ? 'time-grid-block-linked' : (b.isLinked ? 'time-grid-block-linked' : `time-grid-block-${b.kind}`);
         const minutesToLabel = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-        // 블록 안에 보이는 시간 표기는 짧게, "마감"이라는 말이나 채널명은 굳이 텍스트로 또 안 넣고
-        // (아이콘/툴팁으로 충분함) 그만큼 실제 내용(제목)이 보일 공간을 더 확보함
         const timeLabel = b.isDeadlineMarker
           ? `${minutesToLabel(b.startMin)}~${minutesToLabel(b.realEndMin != null ? b.realEndMin : b.endMin)}`
           : `${normalizeTime(b.task.time)}${b.task.endTime ? '~'+normalizeTime(b.task.endTime) : ''}`;
         const icon = b.isDeadlineMarker ? '⏰' : (b.isLinked ? '🎯' : (kindIconMap[b.kind] || '📌'));
         const durationMin = b.endMin - b.startMin;
-        const compact = durationMin < 45;
         const starHtml = b.task.starred ? `<span class="time-grid-h-block-star" title="중요 표시">★</span>` : '';
-        const channelPrefix = b.channel ? `[${b.channel}] ` : '';
         const deadlineSuffix = b.isDeadlineMarker ? ' 마감' : '';
         const continues = b.extendsPastView || b.crossesHalf;
         const trueEndLabel = b.isDeadlineMarker
@@ -2649,23 +2637,29 @@
         const trueStartLabel = b.isDeadlineMarker ? '' : normalizeTime(b.task.time);
         const startsHtml = b.continuesFromBefore ? `<span class="time-grid-h-block-extends" title="이전 시간대부터 이어지는 일정이에요">${escapeHtml(trueStartLabel)}◂</span>` : '';
         const extendsHtml = continues ? `<span class="time-grid-h-block-extends" title="계속 이어지는 일정이에요">▸${escapeHtml(trueEndLabel)}</span>` : '';
+        const channelPrefix = b.channel ? `[${b.channel}] ` : '';
         const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(timeLabel)}${deadlineSuffix}${continues ? ' (계속 이어짐)' : ''} ${channelPrefix}${escapeHtml(b.label)}${b.task.notes ? ' — ' + escapeHtml(b.task.notes) : ''}`;
-        return `<div class="time-grid-h-block ${kindClass} ${compact?'is-compact':''} ${b.isDeadlineMarker?'is-deadline-marker':''}" style="left:${leftPct}%;width:calc(${widthPct}% - 3px);top:${topPx}px;height:${ROW_PX-4}px;" onclick="${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
-          ${compact ? `<span>${icon}</span>${starHtml}${extendsHtml}` : `${startsHtml}${starHtml}<span class="time-grid-h-block-icon">${icon}</span><span class="time-grid-h-block-label">${escapeHtml(b.label)}</span>${extendsHtml}`}
+        // 세로형은 열 전체 폭(또는 레인만큼)을 쓰니까 채널명은 폭 걱정 없이 항상 같이 보여줌
+        return `<div class="time-grid-v-block ${kindClass} ${b.isDeadlineMarker?'is-deadline-marker':''}" style="top:${topPx}px;height:${heightPx-3}px;left:${leftPct}%;width:calc(${widthPct}% - 4px);" onclick="${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
+          <div class="time-grid-v-block-top">${startsHtml}<span class="time-grid-v-block-time">${icon} ${escapeHtml(timeLabel)}</span>${starHtml}</div>
+          <div class="time-grid-v-block-label">${b.channel ? `<span class="time-grid-h-block-channel">[${escapeHtml(b.channel)}]</span> ` : ''}${escapeHtml(b.label)}</div>
+          ${extendsHtml}
         </div>`;
       }).join('');
       return `
-        <div class="time-grid-h-half">
+        <div class="time-grid-v-col">
           <div class="time-grid-h-half-label">${half.label}</div>
-          <div class="time-grid-h-axis">${ticksHtml}</div>
-          <div class="time-grid-h-track" style="height:${laneCount*ROW_PX}px;">${lunchHtml}${nowLineHtml}${eventsHtml}</div>
+          <div style="display:flex;gap:8px;">
+            <div class="time-grid-v-hours" style="height:${colHeight}px;">${hourLabelsHtml}</div>
+            <div class="time-grid-v-track" style="height:${colHeight}px;">${lunchHtml}${nowLineHtml}${eventsHtml}</div>
+          </div>
         </div>
       `;
     }
     return `
       <div class="journal-section">
-        <div class="journal-section-label">🕐 오늘 시간표 ${infoTip('할일에 시작~종료 시각을 넣으면 여기에 길이대로 표시돼요. 겹치는 시간대는 아래로 줄이 하나 더 생겨요. 오전/오후 두 줄로 나눠서 보여줘요.', 220)}</div>
-        <div class="time-grid-h-wrap">
+        <div class="journal-section-label">🕐 오늘 시간표 ${infoTip('할일에 시작~종료 시각을 넣으면 여기에 길이대로 표시돼요. 겹치는 시간대는 옆으로 나란히 배치되고, 오전/오후 두 열로 나눠서 보여줘요.', 220)}</div>
+        <div class="time-grid-v-wrap">
           ${renderHalf(halves[0])}
           ${renderHalf(halves[1])}
         </div>
