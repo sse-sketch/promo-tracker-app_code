@@ -214,6 +214,7 @@
   .journal-link-selection{background:#F3E7D4;color:#8A5A12;}
   .journal-linked-progress{font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--ink-soft);flex-shrink:0;white-space:nowrap;}
   .journal-time-badge{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink-soft);background:var(--surface-2);padding:4px 7px;border-radius:6px;flex-shrink:0;}
+  .journal-time-badge-icon{flex-shrink:0;font-size:12px;opacity:0.55;cursor:default;}
   .journal-start-date-badge{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--ink-faint);background:var(--surface-2);padding:3px 7px;border-radius:6px;flex-shrink:0;white-space:nowrap;}
   .journal-more-hint:hover{color:var(--calm);}
   .selection-mini-row{cursor:default;}
@@ -449,6 +450,7 @@
   .time-grid-h-block.is-compact{justify-content:center;padding:2px;font-size:12px;}
   .time-grid-h-block-time{font-weight:800;font-size:10px;opacity:0.85;flex-shrink:0;}
   .time-grid-h-block-label{font-weight:700;overflow:hidden;text-overflow:ellipsis;}
+  .time-grid-h-block-channel{font-weight:600;opacity:0.7;}
   .time-grid-h-block-star{color:#C9A227;flex-shrink:0;font-size:10px;}
   .time-grid-h-block.is-deadline-marker{border-style:dashed;border-width:1px;border-left-width:3px;box-shadow:none;}
   .time-grid-block{
@@ -1091,22 +1093,27 @@
     render();
   }
   function clearJournalSelection(){ journalSelectedIds.clear(); render(); }
-  function bulkJournalComplete(){
+  function bulkJournalSetStatus(status){
     if(journalSelectedIds.size === 0) return;
+    let itemsChanged = false, tasksChanged = false;
     journalSelectedIds.forEach(id => {
       const task = journalTasks.find(t => t.id === id);
       if(!task) return;
-      if(!task.recurrence){
-        task.done = true;
-        task.completedDate = journalDate;
-      }else{
-        if(!task.doneDates) task.doneDates = {};
-        task.doneDates[journalDate] = true;
+      if(task.linkedItemId && (task.linkedType === 'deadline' || task.linkedType === 'overdue')){
+        const item = items.find(i => i.id === task.linkedItemId);
+        if(item){ item.status = status; itemsChanged = true; }
+      }else if(status === 'submitted'){
+        // 링크 안 된 일반 할일/팔로우업은 상태값 개념이 없어서, "완료로"만 done 처리로 갈음
+        if(!task.recurrence){ task.done = true; task.completedDate = journalDate; }
+        else{ if(!task.doneDates) task.doneDates = {}; task.doneDates[journalDate] = true; }
+        tasksChanged = true;
       }
     });
-    persistJournalTasks();
+    if(itemsChanged) persist();
+    if(tasksChanged) persistJournalTasks();
     journalSelectedIds.clear();
     render();
+    showToast('선택한 항목을 반영했어요');
   }
   function bulkJournalDelete(){
     if(journalSelectedIds.size === 0) return;
@@ -2410,7 +2417,7 @@
         <div class="${rowClass}">
           <input type="checkbox" ${(done || journalSelectedIds.has(task.id))?'checked':''} ${linkedDone?'disabled title="프로모션 항목 자체를 다시 진행중으로 바꿔야 해요"':''} onchange="${done ? `App.toggleJournalTaskDone('${task.id}', '${jd}')` : `App.toggleJournalSelectItem('${task.id}')`}" />
           <span class="star-toggle ${task.starred?'is-starred':''}" onclick="App.toggleJournalTaskStar('${task.id}')" title="중요 표시">${task.starred?'★':'☆'}</span>
-          ${task.time ? `<span class="journal-time-badge">${escapeHtml(task.time)}</span>` : ''}
+          ${task.time ? `<span class="journal-time-badge-icon" title="${escapeHtml(task.time)}${task.endTime ? '~'+escapeHtml(task.endTime) : ''}">🕐</span>` : ''}
           <div class="journal-linked-content" onclick="${clickAction}">
             <span class="journal-link-type-tag journal-link-${task.linkedType}">${journalLinkTypeLabel(task.linkedType)}</span>
             ${linkedItem.channel ? `<span class="tag" style="background:${channelColor(linkedItem.channel).bg};color:${channelColor(linkedItem.channel).text};">${escapeHtml(linkedItem.channel)}</span>` : ''}
@@ -2432,7 +2439,7 @@
           <span class="journal-cat-tag journal-cat-${task.category}">${task.category==='issue'?'팔로우업':'할일'}</span>
           ${task.category!=='issue' && task.taskType && task.taskType!=='todo' ? `<span class="journal-type-pill journal-type-${task.taskType}">${task.taskType==='meeting'?'🗣️ 미팅':task.taskType==='proposal'?'💡 제안':task.taskType==='call'?'📞 컨택':task.taskType==='review'?'📋 검토':''}</span>` : ''}
           ${task.createdDate && task.createdDate !== todayISO() ? `<span class="journal-start-date-badge" title="이 날짜부터 보이도록 지정됨">${fmtDate(task.createdDate)}부터</span>` : ''}
-          ${task.time ? `<span class="journal-time-badge">${escapeHtml(task.time)}</span>` : ''}
+          ${task.time ? `<span class="journal-time-badge-icon" title="${escapeHtml(task.time)}${task.endTime ? '~'+escapeHtml(task.endTime) : ''}">🕐</span>` : ''}
           <span class="journal-linked-title">${escapeHtml(task.text || placeholder || '(내용 없음)')}</span>
           ${task.recurrence ? `<span class="journal-recur-label">🔁 ${recurrenceLabel(task)}</span>` : ''}
           ${task.dueDate ? (() => {
@@ -2547,7 +2554,7 @@
       const clippedEnd = Math.min(endMin, TIME_GRID_END_MIN);
       if(clippedEnd <= TIME_GRID_START_MIN || clippedStart >= TIME_GRID_END_MIN) return; // 시간표 범위 밖
       const label = linkedItem ? (linkedItem.title || linkedItem.content) : (t.text || '(내용 없음)');
-      blocks.push({ task: t, startMin: clippedStart, endMin: Math.max(clippedEnd, clippedStart+12), label, isLinked: !!linkedItem, isDeadlineMarker, kind: t.category==='issue' ? 'issue' : (t.taskType||'todo') });
+      blocks.push({ task: t, startMin: clippedStart, endMin: Math.max(clippedEnd, clippedStart+12), label, isLinked: !!linkedItem, isDeadlineMarker, channel: linkedItem ? linkedItem.channel : null, kind: t.category==='issue' ? 'issue' : (t.taskType||'todo') });
     });
     // 일정이 없어도 시간표 축은 항상 고정으로 떠 있게 함 (있다없다 왔다갔다 하지 않게)
     const packed = blocks.length ? packTimeGridLanes(blocks) : [];
@@ -2584,19 +2591,28 @@
         ? `<div class="time-grid-h-lunch" style="left:${((lunchStart-half.start)/totalMin)*100}%;width:${((lunchEnd-lunchStart)/totalMin)*100}%;" title="점심시간 ${normalizeTime(String(Math.floor(LUNCH_START_MIN/60)).padStart(2,'0')+':'+String(LUNCH_START_MIN%60).padStart(2,'0'))}~${normalizeTime(String(Math.floor(LUNCH_END_MIN/60)).padStart(2,'0')+':'+String(LUNCH_END_MIN%60).padStart(2,'0'))}"><span class="time-grid-h-lunch-label">🍚 점심</span></div>`
         : '';
       const eventsHtml = halfBlocks.map(b => {
-        const leftPct = ((b.startMin - half.start) / totalMin) * 100;
-        const widthPct = ((b.endMin - b.startMin) / totalMin) * 100;
+        let leftPct = ((b.startMin - half.start) / totalMin) * 100;
+        let widthPct = ((b.endMin - b.startMin) / totalMin) * 100;
+        // 우측 경계를 넘어가지 않게 폭을 잘라내고, 너무 짧은 블록도 최소 폭은 보장 — 그렇지 않으면
+        // 트랙 끝(22:00)에 딱 붙은 일정이 테두리만 삐죽 잘려 보이는 문제가 있었음
+        leftPct = Math.max(0, Math.min(leftPct, 100));
+        widthPct = Math.max(widthPct, 2.5);
+        if(leftPct + widthPct > 100) widthPct = 100 - leftPct;
         const topPx = b._lane * ROW_PX;
         const kindClass = b.isDeadlineMarker ? 'time-grid-block-linked' : (b.isLinked ? 'time-grid-block-linked' : `time-grid-block-${b.kind}`);
         const minutesToLabel = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+        // 블록 안에 보이는 시간 표기는 짧게, "마감"이라는 말이나 채널명은 굳이 텍스트로 또 안 넣고
+        // (아이콘/툴팁으로 충분함) 그만큼 실제 내용(제목)이 보일 공간을 더 확보함
         const timeLabel = b.isDeadlineMarker
-          ? `${minutesToLabel(b.startMin)}~${minutesToLabel(b.endMin)} 마감`
+          ? `${minutesToLabel(b.startMin)}~${minutesToLabel(b.endMin)}`
           : `${normalizeTime(b.task.time)}${b.task.endTime ? '~'+normalizeTime(b.task.endTime) : ''}`;
         const icon = b.isDeadlineMarker ? '⏰' : (b.isLinked ? '🎯' : (kindIconMap[b.kind] || '📌'));
         const durationMin = b.endMin - b.startMin;
         const compact = durationMin < 45;
         const starHtml = b.task.starred ? `<span class="time-grid-h-block-star" title="중요 표시">★</span>` : '';
-        const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(timeLabel)} ${escapeHtml(b.label)}${b.task.notes ? ' — ' + escapeHtml(b.task.notes) : ''}`;
+        const channelPrefix = b.channel ? `[${b.channel}] ` : '';
+        const deadlineSuffix = b.isDeadlineMarker ? ' 마감' : '';
+        const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(timeLabel)}${deadlineSuffix} ${channelPrefix}${escapeHtml(b.label)}${b.task.notes ? ' — ' + escapeHtml(b.task.notes) : ''}`;
         return `<div class="time-grid-h-block ${kindClass} ${compact?'is-compact':''} ${b.isDeadlineMarker?'is-deadline-marker':''}" style="left:${leftPct}%;width:calc(${widthPct}% - 3px);top:${topPx}px;height:${ROW_PX-4}px;" onclick="${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
           ${compact ? `<span>${icon}</span>${starHtml}` : `${starHtml}<span class="time-grid-h-block-time">${icon} ${escapeHtml(timeLabel)}</span><span class="time-grid-h-block-label">${escapeHtml(b.label)}</span>`}
         </div>`;
@@ -4672,10 +4688,19 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         <div class="chip ${journalViewMode==='day'?'active':''}" onclick="App.setJournalViewMode('day')">📋 일별</div>
       </div>`;
       if(journalSelectedIds.size > 0){
+        const hasLinkedSelected = Array.from(journalSelectedIds).some(id => {
+          const t = journalTasks.find(t => t.id === id);
+          return t && t.linkedItemId && (t.linkedType === 'deadline' || t.linkedType === 'overdue');
+        });
         html += `<div class="bulk-bar">
           <span class="bulk-count">${journalSelectedIds.size}건 선택됨</span>
           <div class="bulk-actions">
-            <button class="bulk-btn bulk-btn-submitted" onclick="App.bulkJournalComplete()">✓ 완료로</button>
+            <button class="bulk-btn bulk-btn-submitted" onclick="App.bulkJournalSetStatus('submitted')">✓ 완료로</button>
+            ${hasLinkedSelected ? `
+              <button class="bulk-btn bulk-btn-missed" onclick="App.bulkJournalSetStatus('missed')">미제출로</button>
+              <button class="bulk-btn bulk-btn-na" onclick="App.bulkJournalSetStatus('na')">해당없음으로</button>
+              <button class="bulk-btn bulk-btn-pending" onclick="App.bulkJournalSetStatus('pending')">대기중으로</button>
+            ` : ''}
             <span class="bulk-sep"></span>
             <button class="bulk-btn bulk-btn-delete" onclick="App.bulkJournalDelete()">🗑 삭제</button>
             <button class="bulk-btn bulk-btn-clear" onclick="App.clearJournalSelection()">해제</button>
@@ -5084,6 +5109,25 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
             <input type="text" value="${escapeHtml(f.title||'')}" placeholder="예: [E4CZZ] 추석_얼리버드 1주차" oninput="App.updateField('title', this.value)" />
           </div>
           <div class="field">
+            <label>상태</label>
+            <select onchange="App.updateFieldAndRender('status', this.value)">
+              <option value="pending" ${f.status==='pending'?'selected':''}>대기중</option>
+              <option value="submitted" ${f.status==='submitted'?'selected':''}>제출완료</option>
+              <option value="na" ${f.status==='na'?'selected':''}>해당없음</option>
+              <option value="missed" ${f.status==='missed'?'selected':''}>미제출</option>
+            </select>
+          </div>
+          ${f.status === 'submitted' ? `
+            <div class="field">
+              <label>선정 여부 <span style="font-weight:400;color:var(--ink-faint);">(제출완료 ≠ 확정. 채널에서 실제로 골라줘야 확정이에요)</span></label>
+              <select onchange="App.updateField('selection', this.value)">
+                <option value="pending" ${f.selection==='pending'?'selected':''}>⏳ 선정 대기중</option>
+                <option value="selected" ${(!f.selection||f.selection==='selected')?'selected':''}>✅ 선정됨 (확정)</option>
+                <option value="rejected" ${f.selection==='rejected'?'selected':''}>❌ 미선정</option>
+              </select>
+            </div>
+          ` : ''}
+          <div class="field">
             <label>내용 설명</label>
             <textarea placeholder="프로모션 상세 내용을 입력하세요" oninput="App.updateField('content', this.value)">${escapeHtml(f.content)}</textarea>
           </div>
@@ -5120,25 +5164,6 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
               `).join('')}
             </div>
           </div>
-          ` : ''}
-          <div class="field">
-            <label>상태</label>
-            <select onchange="App.updateFieldAndRender('status', this.value)">
-              <option value="pending" ${f.status==='pending'?'selected':''}>대기중</option>
-              <option value="submitted" ${f.status==='submitted'?'selected':''}>제출완료</option>
-              <option value="na" ${f.status==='na'?'selected':''}>해당없음</option>
-              <option value="missed" ${f.status==='missed'?'selected':''}>미제출</option>
-            </select>
-          </div>
-          ${f.status === 'submitted' ? `
-            <div class="field">
-              <label>선정 여부 <span style="font-weight:400;color:var(--ink-faint);">(제출완료 ≠ 확정. 채널에서 실제로 골라줘야 확정이에요)</span></label>
-              <select onchange="App.updateField('selection', this.value)">
-                <option value="pending" ${f.selection==='pending'?'selected':''}>⏳ 선정 대기중</option>
-                <option value="selected" ${(!f.selection||f.selection==='selected')?'selected':''}>✅ 선정됨 (확정)</option>
-                <option value="rejected" ${f.selection==='rejected'?'selected':''}>❌ 미선정</option>
-              </select>
-            </div>
           ` : ''}
           <div class="field">
             <label class="recheck-check">
@@ -5700,7 +5725,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     toggleJournalSelectMode,
     toggleJournalSelectItem,
     clearJournalSelection,
-    bulkJournalComplete,
+    bulkJournalSetStatus,
     bulkJournalDelete,
     setJournalSearchQuery,
     toggleJournalDoneExpanded,
