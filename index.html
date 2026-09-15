@@ -1465,9 +1465,39 @@
     }
     const existingIds = new Set(items.map(i => i.id));
     const toAdd = importedItems.filter(p => !existingIds.has(p.id));
+    const toUpdate = importedItems.filter(p => existingIds.has(p.id));
+    // 이미 있는 항목을 덮어쓰기 전에, 뭐가 바뀌는지 먼저 보여주고 확인받음 (마감일 등 조용히 바뀌면 못 알아챌 수 있어서)
+    const FIELD_LABELS = { title:'제목', deadline:'마감일', deadlineTime:'마감 시각', status:'상태', period:'진행기간', coupon:'쿠폰' };
+    const changeLines = [];
+    toUpdate.forEach(updated => {
+      const existing = items.find(i => i.id === updated.id);
+      const changed = [];
+      Object.keys(FIELD_LABELS).forEach(key => {
+        if(updated[key] !== undefined && updated[key] !== existing[key]){
+          changed.push(`${FIELD_LABELS[key]}: ${existing[key]||'(없음)'} → ${updated[key]||'(없음)'}`);
+        }
+      });
+      if(changed.length) changeLines.push(`• ${existing.title||existing.content||'(제목 없음)'}\n   ${changed.join(' / ')}`);
+    });
+    if(toAdd.length === 0 && changeLines.length === 0){
+      showToast('변경된 내용이 없어요');
+      return;
+    }
+    const addNote = toAdd.length ? `${toAdd.length}건 새로 추가\n` : '';
+    const updateNote = changeLines.length ? `${changeLines.length}건 아래처럼 업데이트:\n${changeLines.join('\n')}` : '';
+    confirmModal = {
+      message: `${addNote}${updateNote}`.trim(),
+      type: 'restoreMerge',
+      payload: { importedItems, importedJournalEntries, importedJournalTasks },
+      confirmLabel: '반영하기'
+    };
+    render();
+  }
+  function doRestoreMerge(payload){
+    const { importedItems, importedJournalEntries, importedJournalTasks } = payload;
+    const existingIds = new Set(items.map(i => i.id));
+    const toAdd = importedItems.filter(p => !existingIds.has(p.id));
     let updatedCount = 0;
-    // 이미 있는 id는 그냥 건너뛰지 않고, 바뀐 필드(마감일 등)를 실제로 반영함 — 예전엔 병합해도
-    // 기존 항목은 손도 안 대서, 마감일 바뀐 내용을 다시 붙여넣어도 전혀 업데이트가 안 되는 문제가 있었음
     items = items.map(existing => {
       const updated = importedItems.find(p => p.id === existing.id);
       if(updated){ updatedCount++; return Object.assign({}, existing, updated); }
@@ -2457,7 +2487,7 @@
     // "마감"(deadline)은 오늘이 진짜 마감일일 때만 유효함 — 날짜가 지나면 "지난마감"(overdue)이 새로
     // 만들어지면서 이 옛날 마감 리마인더는 자동으로 완료 처리돼서 사라짐 (둘이 동시에 안 뜨게)
     if(task.linkedType === 'deadline') return (item.status||'pending') === 'pending' && item.deadline === todayISO();
-    if(task.linkedType === 'overdue') return (item.status||'pending') === 'pending';
+    if(task.linkedType === 'overdue') return (item.status||'pending') === 'pending' && item.deadline && item.deadline < todayISO();
     if(task.linkedType === 'setup') return isPrepping(item);
     if(task.linkedType === 'selection') return item.status === 'submitted' && item.selection === 'pending';
     return true;
@@ -2466,7 +2496,14 @@
   // "완료된 것"으로 쳐서 완료 기록에 남게 함 — 프로모션을 제출완료로 바꿨는데 할일 기록만 흔적도 없이
   // 사라지면 오늘 뭘 처리했는지 나중에 못 알아보는 문제가 있었음
   function isLinkedTaskEffectivelyDone(task){
-    return !!(task.linkedItemId && items.find(i => i.id === task.linkedItemId) && !isLinkedTaskStillRelevant(task));
+    if(!task.linkedItemId) return false;
+    const item = items.find(i => i.id === task.linkedItemId);
+    if(!item) return false;
+    if(isLinkedTaskStillRelevant(task)) return false;
+    // 마감/지난마감인데 아직 진행중(pending)이면, 실제로 뭔가 처리된 게 아니라 마감일이 밀렸을 뿐일 수 있음 —
+    // 이런 경우는 "완료"가 아니라 그냥 표시 안 함(둘 다 아님)으로 처리해서 완료 기록에 잘못 끼지 않게 함
+    if((task.linkedType === 'deadline' || task.linkedType === 'overdue') && (item.status||'pending') === 'pending') return false;
+    return true;
   }
   function tasksForDate(jd, category){
     return journalTasks.filter(t => t.category === category && taskAppliesToDate(t, jd) && !isTaskDoneOnDate(t, jd) && isLinkedTaskStillRelevant(t));
@@ -3230,6 +3267,7 @@
       case 'restoreReplace': doRestoreReplace(cm.payload); break;
       case 'removeCalendarOnly': doRemoveAllCalendarOnly(); break;
       case 'restoreSnapshot': doRestoreSnapshot(cm.payload); break;
+      case 'restoreMerge': doRestoreMerge(cm.payload); break;
       case 'cleanupLegacyTasks': doCleanupLegacyTasks(cm.payload); break;
       case 'bulkJournalDelete': doBulkJournalDelete(); break;
       case 'reviewDup': doSaveReviewItems(cm.payload.rows); doSaveReviewTasks(cm.payload.taskRows); closeModal(); break;
