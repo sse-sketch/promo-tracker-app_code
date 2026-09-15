@@ -143,6 +143,7 @@
     display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
     background:var(--surface);border:1.5px solid var(--brand);border-radius:14px;padding:14px 18px;margin:14px 0 20px;
     box-shadow:0 8px 20px -14px rgba(35,46,41,0.3);
+    position:sticky;top:8px;z-index:20;
   }
   .bulk-count{color:var(--ink);font-size:13.5px;font-weight:700;flex-shrink:0;}
   .bulk-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
@@ -440,10 +441,10 @@
   .time-grid-v-now{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--urgent);z-index:5;}
   .time-grid-now-dot{position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:50%;background:var(--urgent);box-shadow:0 0 0 3px rgba(175,74,65,0.18);}
   .time-grid-v-block{
-    position:absolute;border-radius:7px;padding:0 8px;overflow:hidden;cursor:pointer;
+    position:absolute;border-radius:7px;padding:5px 8px;overflow:hidden;cursor:pointer;
     font-size:10.5px;line-height:1.25;box-sizing:border-box;border-left:3px solid transparent;
     box-shadow:0 2px 5px -2px rgba(35,46,41,0.16);transition:transform .12s ease, box-shadow .12s ease;
-    display:flex;align-items:center;
+    display:flex;align-items:flex-start;
   }
   .time-grid-v-block:hover{transform:translateY(-1px);box-shadow:0 5px 12px -3px rgba(35,46,41,0.26);z-index:3;}
   .time-grid-v-block.is-deadline-marker{border-style:dashed;border-width:1px;border-left-width:3px;box-shadow:none;}
@@ -875,7 +876,9 @@
       const maxAttempts = 3;
       let lastRes;
       for(let attempt = 1; attempt <= maxAttempts; attempt++){
-        const res = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/${path}`, Object.assign({}, options || {}, { headers: mergedHeaders }));
+        // cache:'no-store'가 없으면 브라우저가 예전에 받아뒀던 응답(오래된 sha)을 그대로 재사용할 수 있어서,
+        // 실제로는 파일이 이미 바뀐 상태인데 옛날 sha로 저장을 시도해 매번 409(충돌)가 나던 원인이었음
+        const res = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/${path}`, Object.assign({}, options || {}, { headers: mergedHeaders, cache: 'no-store' }));
         lastRes = res;
         const isRateLimited = res.status === 429 || (res.status === 403 && (res.headers.get('x-ratelimit-remaining') === '0' || res.headers.get('retry-after')));
         if(!isRateLimited || attempt === maxAttempts) return res;
@@ -1570,7 +1573,7 @@
   // 새로고침(브라우저 리로드)해도 보고 있던 탭/날짜로 돌아오게 — 이게 없으면 매번 현황판으로 리셋됐음
   const VIEW_STATE_KEY = 'promo-tracker-view-state';
   function saveViewState(){
-    try{ localStorage.setItem(VIEW_STATE_KEY, JSON.stringify({ mainTab, journalDate, journalViewMode })); }catch(e){}
+    try{ localStorage.setItem(VIEW_STATE_KEY, JSON.stringify({ mainTab, journalDate, journalViewMode, savedOn: todayISO() })); }catch(e){}
   }
   function restoreViewState(){
     try{
@@ -1578,7 +1581,9 @@
       if(!raw) return;
       const s = JSON.parse(raw);
       if(s.mainTab) mainTab = s.mainTab;
-      if(s.journalDate) journalDate = s.journalDate;
+      // 날짜는 "오늘 저장된 상태"일 때만 복원함 — 안 그러면 며칠 지나서 다시 켰을 때도 예전에 보던 날짜에
+      // 그대로 멈춰있고, 정작 "오늘"은 안 보여서 마치 오늘 게 없는 것처럼 보였음
+      if(s.journalDate && s.savedOn === todayISO()) journalDate = s.journalDate;
       if(s.journalViewMode) journalViewMode = s.journalViewMode;
     }catch(e){}
   }
@@ -2484,7 +2489,6 @@
         <div class="journal-linked-content" onclick="App.openTaskMemo('${task.id}')">
           <span class="journal-cat-tag journal-cat-${task.category}">${task.category==='issue'?'팔로우업':'할일'}</span>
           ${task.category!=='issue' && task.taskType && task.taskType!=='todo' ? `<span class="journal-type-pill journal-type-${task.taskType}">${task.taskType==='meeting'?'🗣️ 미팅':task.taskType==='proposal'?'💡 제안':task.taskType==='call'?'📞 컨택':task.taskType==='review'?'📋 검토':''}</span>` : ''}
-          ${task.createdDate && task.createdDate !== todayISO() ? `<span class="journal-start-date-badge" title="이 날짜부터 보이도록 지정됨">${fmtDate(task.createdDate)}부터</span>` : ''}
           ${task.time ? `<span class="journal-time-badge">🕐 ${escapeHtml(normalizeTime(task.time))}${task.endTime ? '~'+escapeHtml(normalizeTime(task.endTime)) : ''}</span>` : ''}
           <span class="journal-linked-title">${escapeHtml(task.text || placeholder || '(내용 없음)')}</span>
           ${task.recurrence ? `<span class="journal-recur-label">🔁 ${recurrenceLabel(task)}</span>` : ''}
@@ -2671,7 +2675,7 @@
         const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(timeLabel)}${deadlineSuffix}${continues ? ' (계속 이어짐)' : ''} ${channelPrefix}${escapeHtml(b.label)}${b.task.notes ? ' — ' + escapeHtml(b.task.notes) : ''}`;
         // 세로형은 열 전체 폭(또는 레인만큼)을 쓰니까 채널명은 폭 걱정 없이 항상 같이 보여줌
         return `<div class="time-grid-v-block ${kindClass} ${b.isDeadlineMarker?'is-deadline-marker':''}" style="top:${topPx}px;height:${heightPx-3}px;left:${leftPct}%;width:calc(${widthPct}% - 4px);" onclick="${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
-          <div class="time-grid-v-block-line">${startsHtml}<span class="time-grid-v-block-icon">${icon}</span>${b.channel ? `<span class="time-grid-h-block-channel">[${escapeHtml(b.channel)}]</span>` : ''}<span class="time-grid-v-block-label">${escapeHtml(b.label)}</span>${starHtml}${extendsHtml}</div>
+          <div class="time-grid-v-block-line"><span class="time-grid-v-block-icon">${icon}</span>${b.channel ? `<span class="time-grid-h-block-channel">[${escapeHtml(b.channel)}]</span>` : ''}<span class="time-grid-v-block-label">${escapeHtml(b.label)}</span>${starHtml}${startsHtml}${extendsHtml}</div>
         </div>`;
       }).join('');
       return `
@@ -2741,7 +2745,7 @@
       task.category = 'todo';
       task.taskType = ['todo','meeting','proposal','call','review'].includes(kind) ? kind : 'todo';
     }
-    persistJournalTasks();
+    journalMemoDirty = true;
     render();
   }
   function updateJournalTaskText(id, value){
@@ -2762,13 +2766,15 @@
     const task = journalTasks.find(t => t.id === id);
     if(!task) return;
     task.time = value;
-    persistJournalTasksDebounced();
+    journalMemoDirty = true;
+    render();
   }
   function updateJournalTaskEndTime(id, value){
     const task = journalTasks.find(t => t.id === id);
     if(!task) return;
     task.endTime = value;
-    persistJournalTasksDebounced();
+    journalMemoDirty = true;
+    render();
   }
   function updateJournalTaskNotes(id, value){
     const task = journalTasks.find(t => t.id === id);
@@ -2786,7 +2792,7 @@
     const task = journalTasks.find(t => t.id === id);
     if(!task) return;
     task.dueDate = value;
-    persistJournalTasks();
+    journalMemoDirty = true;
     render();
   }
   function toggleJournalTaskDone(id, dateStr){
@@ -2866,7 +2872,7 @@
     else if(value === 'weekly') task.recurrence = { type:'weekly', dow: d.getDay() };
     else if(value === 'monthly') task.recurrence = { type:'monthly', day: d.getDate() };
     else if(value === 'custom') task.recurrence = { type:'custom', days: [] }; // 오늘 요일을 몰래 미리 체크해두지 않음 — 아래 요일 버튼에서 직접 고르게 함
-    persistJournalTasks();
+    journalMemoDirty = true;
     render();
   }
   function toggleJournalTaskRecurCustomDay(id, dow){
@@ -2876,14 +2882,14 @@
     const idx = task.recurrence.days.indexOf(dow);
     if(idx >= 0) task.recurrence.days.splice(idx, 1);
     else task.recurrence.days.push(dow);
-    persistJournalTasks();
+    journalMemoDirty = true;
     render();
   }
   function updateJournalTaskRecurUntil(id, value){
     const task = journalTasks.find(t => t.id === id);
     if(!task || !task.recurrence) return;
     task.recurrence.until = value || null;
-    persistJournalTasksDebounced();
+    journalMemoDirty = true;
     render();
   }
   function removeJournalTask(id){
@@ -4777,27 +4783,6 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         <div class="chip ${journalViewMode==='week'?'active':''}" onclick="App.setJournalViewMode('week')">📆 주별</div>
         <div class="chip ${journalViewMode==='day'?'active':''}" onclick="App.setJournalViewMode('day')">📋 일별</div>
       </div>`;
-      if(journalSelectedIds.size > 0){
-        const hasLinkedSelected = Array.from(journalSelectedIds).some(id => {
-          const t = journalTasks.find(t => t.id === id);
-          return t && t.linkedItemId && (t.linkedType === 'deadline' || t.linkedType === 'overdue');
-        });
-        html += `<div class="bulk-bar">
-          <span class="bulk-count">${journalSelectedIds.size}건 선택됨</span>
-          <div class="bulk-actions">
-            <button class="bulk-btn bulk-btn-submitted" onclick="App.bulkJournalSetStatus('submitted')">✓ 완료</button>
-            ${hasLinkedSelected ? `
-              <button class="bulk-btn bulk-btn-missed" onclick="App.bulkJournalSetStatus('missed')">미제출</button>
-              <button class="bulk-btn bulk-btn-na" onclick="App.bulkJournalSetStatus('na')">해당없음</button>
-              <button class="bulk-btn bulk-btn-pending" onclick="App.bulkJournalSetStatus('pending')">대기중</button>
-            ` : ''}
-            <span class="bulk-sep"></span>
-            <button class="bulk-btn bulk-btn-delete" onclick="App.bulkJournalDelete()">🗑 삭제</button>
-            <button class="bulk-btn bulk-btn-clear" onclick="App.clearJournalSelection()">해제</button>
-          </div>
-        </div>`;
-      }
-
       const legacyCount = findLegacyDuplicateTasks().length;
       if(legacyCount > 0){
         html += `<div class="journal-import-hint">🧹 프로모션과 내용이 겹치는 예전 방식 할일 ${legacyCount}건이 있어요 <span class="section-label-action" onclick="App.cleanupLegacyJournalTasks()">정리하기 →</span></div>`;
@@ -4963,6 +4948,26 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
             <div class="journal-done-toggle" onclick="App.toggleJournalDoneExpanded('${doneKey}')">${doneExpanded?'▾':'▸'} 완료 ${doneTasks.length}건 ${doneExpanded?'숨기기':'보기'}</div>
             ${doneExpanded ? `<div class="journal-list" style="margin-top:8px;">${doneTasks.map(task => journalTaskRowHtml(task, jd, placeholder)).join('')}</div>` : ''}
           ` : ''}
+        </div>`;
+      }
+      if(journalSelectedIds.size > 0){
+        const hasLinkedSelected = Array.from(journalSelectedIds).some(id => {
+          const t = journalTasks.find(t => t.id === id);
+          return t && t.linkedItemId && (t.linkedType === 'deadline' || t.linkedType === 'overdue');
+        });
+        html += `<div class="bulk-bar">
+          <span class="bulk-count">${journalSelectedIds.size}건 선택됨</span>
+          <div class="bulk-actions">
+            <button class="bulk-btn bulk-btn-submitted" onclick="App.bulkJournalSetStatus('submitted')">✓ 완료</button>
+            ${hasLinkedSelected ? `
+              <button class="bulk-btn bulk-btn-missed" onclick="App.bulkJournalSetStatus('missed')">미제출</button>
+              <button class="bulk-btn bulk-btn-na" onclick="App.bulkJournalSetStatus('na')">해당없음</button>
+              <button class="bulk-btn bulk-btn-pending" onclick="App.bulkJournalSetStatus('pending')">대기중</button>
+            ` : ''}
+            <span class="bulk-sep"></span>
+            <button class="bulk-btn bulk-btn-delete" onclick="App.bulkJournalDelete()">🗑 삭제</button>
+            <button class="bulk-btn bulk-btn-clear" onclick="App.clearJournalSelection()">해제</button>
+          </div>
         </div>`;
       }
       journalTaskSection('todo', '📌 업무 기록', '내용을 입력하세요',
@@ -5693,7 +5698,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
               </div>
             ` : '')}
             <textarea class="journal-memo-textarea" placeholder="상세 내용, 참고사항 등을 자유롭게 적어두세요" oninput="App.updateJournalTaskNotes('${memoTask.id}', this.value)">${escapeHtml(memoTask.notes||'')}</textarea>
-            <div class="hint" style="margin-top:8px;color:var(--ink-faint);">제목/메모는 저장 버튼을 눌러야 반영돼요 (나머지는 바로 저장돼요)</div>
+            <div class="hint" style="margin-top:8px;color:var(--ink-faint);">이 안에서 바꾼 내용은 "저장" 버튼을 눌러야 한번에 반영돼요</div>
             <div style="display:flex;gap:8px;margin-top:10px;">
               <button type="button" class="btn btn-ghost" style="flex:1;" onclick="App.closeFloatingDetail()">닫기</button>
               <button type="button" class="btn ${journalMemoDirty ? 'btn-primary' : 'btn-ghost'}" style="flex:1;" onclick="App.saveJournalMemoNow()">${journalMemoDirty ? '● 저장' : '저장'}</button>
