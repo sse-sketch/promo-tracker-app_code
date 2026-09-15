@@ -55,6 +55,8 @@
   .btn-primary{background:var(--ink);color:#fff;box-shadow:0 8px 18px -8px rgba(35,46,41,0.45);}
   .btn-primary:hover{background:#152019;}
   .btn-ghost{background:transparent;color:var(--ink-soft);border:1px solid var(--line);}
+  .btn-text-danger{background:transparent;border:none;color:var(--ink-faint);font-size:12px;padding:6px;cursor:pointer;font-family:var(--sans);transition:color .12s ease;}
+  .btn-text-danger:hover{color:var(--urgent);text-decoration:underline;}
   .btn-ghost:hover{border-color:var(--ink-faint);color:var(--ink);}
   .btn-text{background:none;color:var(--ink-soft);padding:6px 8px;font-weight:600;font-size:13px;}
   .btn-text:hover{color:var(--ink);}
@@ -1593,6 +1595,7 @@
   let journalDate = todayISO();
   let journalDidDirty = false; // "오늘 한 일" 편집 중이라 아직 저장 버튼을 안 누른 상태인지
   let journalMemoDirty = false; // 할일 메모(제목/내용)에 저장 안 된 편집이 있는지
+  let journalMemoIsNew = false; // 방금 만들어져서 아직 한 번도 저장 안 된 할일인지 (안 채우고 닫으면 그냥 없어지게)
   let journalViewMode = 'day'; // 'day' | 'week' | 'month'
   let journalWeekAnchor = calcWeekStart(new Date());
   let journalSearchQuery = '';
@@ -2395,6 +2398,10 @@
   function taskAppliesToDate(task, jd){
     if(!task.recurrence){
       if(task.createdDate && jd < task.createdDate) return false; // 지정한 날짜 되기 전엔 안 보임
+      // 시각이 정해진 항목(미팅/컨택 등 특정 시간에 일어나는 일)은 그 날 하루만 유효함 — 시각 없는
+      // 순수 할일만 완료 전까지 매일 이월되게 함. 안 그러면 하루짜리 미팅이 체크 안 하면 계속 매일 떠서
+      // 마치 "매일 반복"인 것처럼 보이는 문제가 있었음
+      if(task.time) return jd === task.createdDate;
       return true; // 그 날짜부터는 완료 전까지 매일 계속 보임(이월)
     }
     if(task.recurrence.until && jd > task.recurrence.until) return false; // 반복 종료일이 지나면 더 이상 안 보임
@@ -2738,8 +2745,8 @@
       id, text:'', category:'todo', taskType:'todo', recurrence:null, done:false, doneDates:{},
       createdDate: dateStr, time: timeStr, endTime, notes:'', dueDate:'', completedDate:null
     });
-    persistJournalTasks();
-    openTaskMemo(id); // 구글캘린더처럼 시간표의 빈 곳 클릭하면 그 시각으로 바로 입력창이 뜨게
+    // 빈 채로 바로 저장하지 않음 — 메모 팝업에서 실제로 채우고 "저장" 눌러야 커밋됨 (안 채우고 닫으면 그냥 사라짐)
+    openTaskMemo(id, true); // 구글캘린더처럼 시간표의 빈 곳 클릭하면 그 시각으로 바로 입력창이 뜨게
   }
   // 시간표에서 이미 있는 블록이 아니라 빈 곳을 클릭했을 때만 동작 — 클릭한 세로 위치를 시각으로 환산(30분 단위로 스냅)
   function handleTimeGridTrackClick(evt, jd, halfStartMin, totalMin, colHeight){
@@ -2755,7 +2762,7 @@
   function addJournalTask(category){
     const id = 'jt_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
     persistJournalTasks();
-    openTaskMemo(id); // 항목 추가하자마자 바로 상세 입력창이 뜨게 해서, 목록에서 빈 줄 클릭하는 한 단계를 줄임
+    openTaskMemo(id, true); // 항목 추가하자마자 바로 상세 입력창이 뜨게 해서, 목록에서 빈 줄 클릭하는 한 단계를 줄임
   }
   function setJournalTaskKind(id, kind){
     const task = journalTasks.find(t => t.id === id);
@@ -2806,6 +2813,7 @@
   function saveJournalMemoNow(){
     persistJournalTasks();
     journalMemoDirty = false;
+    journalMemoIsNew = false;
     showToast('저장했어요');
     render();
   }
@@ -2914,7 +2922,9 @@
     render();
   }
   function removeJournalTask(id){
+    const removed = journalTasks.filter(t => t.id === id);
     journalTasks = journalTasks.filter(t => t.id !== id);
+    if(removed.length) scheduleJournalUndo(removed, `${removed[0].text || '항목'} 삭제됨`);
     persistJournalTasks();
     render();
   }
@@ -3114,13 +3124,45 @@
     floatingDetail = { type:'setup', itemId: id };
     render();
   }
-  function openTaskMemo(taskId){
+  function openTaskMemo(taskId, isNew){
     floatingDetail = { type:'memo', taskId };
     journalMemoDirty = false;
+    journalMemoIsNew = !!isNew;
     render();
   }
   function closeFloatingDetail(){
+    // 새로 만든 할일인데 한 번도 저장 안 하고 닫으면, 빈 채로 남아있지 않게 그냥 없애버림
+    if(floatingDetail && floatingDetail.type === 'memo' && journalMemoIsNew){
+      journalTasks = journalTasks.filter(t => t.id !== floatingDetail.taskId);
+    }
     floatingDetail = null;
+    journalMemoIsNew = false;
+    render();
+  }
+  let journalUndoStack = null; // { tasks:[...], label:str, timeoutId } — 할일/미팅 삭제용 되돌리기 (프로모션 항목의 undoStack과는 별개)
+  function scheduleJournalUndo(removedTasks, label){
+    if(journalUndoStack && journalUndoStack.timeoutId) clearTimeout(journalUndoStack.timeoutId);
+    journalUndoStack = { tasks: removedTasks, label };
+    journalUndoStack.timeoutId = setTimeout(() => { journalUndoStack = null; render(); }, 6000);
+  }
+  function undoJournalTaskDelete(){
+    if(!journalUndoStack) return;
+    journalTasks = journalTasks.concat(journalUndoStack.tasks);
+    clearTimeout(journalUndoStack.timeoutId);
+    journalUndoStack = null;
+    persistJournalTasks();
+    render();
+    showToast('복구됐어요');
+  }
+  function deleteJournalTaskFromMemo(){
+    if(!floatingDetail || floatingDetail.type !== 'memo') return;
+    const taskId = floatingDetail.taskId;
+    const removed = journalTasks.filter(t => t.id === taskId);
+    journalTasks = journalTasks.filter(t => t.id !== taskId);
+    journalMemoIsNew = false; // 이미 지웠으니 closeFloatingDetail이 또 지우려 하지 않게
+    floatingDetail = null;
+    if(removed.length) scheduleJournalUndo(removed, `${removed[0].text || '항목'} 삭제됨`);
+    persistJournalTasks();
     render();
   }
   function closeSetupPreview(){ closeFloatingDetail(); }
@@ -5724,6 +5766,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
               <button type="button" class="btn btn-ghost" style="flex:1;" onclick="App.closeFloatingDetail()">닫기</button>
               <button type="button" class="btn ${journalMemoDirty ? 'btn-primary' : 'btn-ghost'}" style="flex:1;" onclick="App.saveJournalMemoNow()">${journalMemoDirty ? '● 저장' : '저장'}</button>
             </div>
+            <button type="button" class="btn-text-danger" style="width:100%;margin-top:8px;" onclick="App.deleteJournalTaskFromMemo()">삭제</button>
           </div>
         `;
       }else{
@@ -5749,6 +5792,8 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
 
     if(undoStack){
       html += `<div class="toast undo-toast">${escapeHtml(undoStack.label)} <button class="undo-btn" onclick="App.undoDelete()">되돌리기</button></div>`;
+    }else if(journalUndoStack){
+      html += `<div class="toast undo-toast">${escapeHtml(journalUndoStack.label)} <button class="undo-btn" onclick="App.undoJournalTaskDelete()">되돌리기</button></div>`;
     }else if(toastMsg){
       html += `<div class="toast">${escapeHtml(toastMsg)}</div>`;
     }
@@ -5790,6 +5835,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     closeModal,
     deleteItem,
     undoDelete,
+    undoJournalTaskDelete,
     chooseConfirm,
     setFilter(c){ activeFilter = c; render(); },
     setTab(t){ modalState.tab = t; modalState.parseError=''; render(); },
@@ -5885,6 +5931,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     updateJournalTaskEndTime,
     updateJournalTaskNotes,
     saveJournalMemoNow,
+    deleteJournalTaskFromMemo,
     updateJournalTaskDueDate,
     openTaskMemo,
     openNewChannelPrompt,
