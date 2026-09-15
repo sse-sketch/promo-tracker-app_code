@@ -435,7 +435,8 @@
   .time-grid-v-hours{width:42px;flex-shrink:0;position:relative;}
   .time-grid-v-hour-row{border-top:1px dashed var(--line);position:relative;}
   .time-grid-v-hour-label{position:absolute;top:-7px;left:0;font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);}
-  .time-grid-v-track{flex:1;position:relative;}
+  .time-grid-v-track{flex:1;position:relative;border-radius:6px;transition:background .1s ease;}
+  .time-grid-v-track:hover{background:rgba(122,110,90,0.05);}
   .time-grid-v-lunch{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,rgba(136,135,128,0.10),rgba(136,135,128,0.10) 6px,rgba(136,135,128,0.04) 6px,rgba(136,135,128,0.04) 12px);border-top:1px dashed var(--ink-faint);border-bottom:1px dashed var(--ink-faint);z-index:0;}
   .time-grid-v-lunch-label{position:absolute;top:2px;left:4px;font-size:9.5px;color:var(--ink-faint);white-space:nowrap;}
   .time-grid-v-now{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--urgent);z-index:5;}
@@ -2683,7 +2684,7 @@
           <div class="time-grid-h-half-label">${half.label}</div>
           <div style="display:flex;gap:8px;">
             <div class="time-grid-v-hours" style="height:${colHeight}px;">${hourLabelsHtml}</div>
-            <div class="time-grid-v-track" style="height:${colHeight}px;">${lunchHtml}${nowLineHtml}${eventsHtml}</div>
+            <div class="time-grid-v-track" style="height:${colHeight}px;cursor:pointer;" title="빈 곳을 클릭하면 그 시각으로 할일이 바로 만들어져요" onclick="App.handleTimeGridTrackClick(event, '${jd}', ${half.start}, ${totalMin}, ${colHeight})">${lunchHtml}${nowLineHtml}${eventsHtml}</div>
           </div>
         </div>
       `;
@@ -2728,11 +2729,31 @@
       </label>
     `;
   }
+  function addJournalTaskAtTime(dateStr, timeStr){
+    const id = 'jt_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+    const startMin = timeToMinutes(timeStr) || 0;
+    const endMin = startMin + 30;
+    const endTime = `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`;
+    journalTasks.push({
+      id, text:'', category:'todo', taskType:'todo', recurrence:null, done:false, doneDates:{},
+      createdDate: dateStr, time: timeStr, endTime, notes:'', dueDate:'', completedDate:null
+    });
+    persistJournalTasks();
+    openTaskMemo(id); // 구글캘린더처럼 시간표의 빈 곳 클릭하면 그 시각으로 바로 입력창이 뜨게
+  }
+  // 시간표에서 이미 있는 블록이 아니라 빈 곳을 클릭했을 때만 동작 — 클릭한 세로 위치를 시각으로 환산(30분 단위로 스냅)
+  function handleTimeGridTrackClick(evt, jd, halfStartMin, totalMin, colHeight){
+    if(evt.target.closest('.time-grid-v-block')) return; // 블록 자체를 클릭한 거면 그 블록의 클릭이 우선(수정/메모 열기)
+    const rect = evt.currentTarget.getBoundingClientRect();
+    const offsetY = evt.clientY - rect.top;
+    const ratio = Math.max(0, Math.min(1, offsetY / colHeight));
+    let min = halfStartMin + ratio * totalMin;
+    min = Math.round(min / 30) * 30;
+    const timeStr = `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`;
+    addJournalTaskAtTime(jd, timeStr);
+  }
   function addJournalTask(category){
     const id = 'jt_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
-    journalTasks.push({
-      id, text: '', category, taskType: 'todo', recurrence: null, done: false, doneDates: {}, createdDate: journalDate, time: '', notes: '', dueDate: '', completedDate: null
-    });
     persistJournalTasks();
     openTaskMemo(id); // 항목 추가하자마자 바로 상세 입력창이 뜨게 해서, 목록에서 빈 줄 클릭하는 한 단계를 줄임
   }
@@ -5855,6 +5876,8 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     setJournalSearchQuery,
     toggleJournalDoneExpanded,
     addJournalTask,
+    addJournalTaskAtTime,
+    handleTimeGridTrackClick,
     updateJournalTaskText,
     updateJournalTaskCategory,
     setJournalTaskKind,
