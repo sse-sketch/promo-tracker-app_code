@@ -1465,6 +1465,14 @@
     }
     const existingIds = new Set(items.map(i => i.id));
     const toAdd = importedItems.filter(p => !existingIds.has(p.id));
+    let updatedCount = 0;
+    // 이미 있는 id는 그냥 건너뛰지 않고, 바뀐 필드(마감일 등)를 실제로 반영함 — 예전엔 병합해도
+    // 기존 항목은 손도 안 대서, 마감일 바뀐 내용을 다시 붙여넣어도 전혀 업데이트가 안 되는 문제가 있었음
+    items = items.map(existing => {
+      const updated = importedItems.find(p => p.id === existing.id);
+      if(updated){ updatedCount++; return Object.assign({}, existing, updated); }
+      return existing;
+    });
     items = items.concat(toAdd);
     if(importedJournalTasks !== undefined){
       const existingTaskIds = new Set(journalTasks.map(t => t.id));
@@ -1489,7 +1497,10 @@
     persist();
     backupOpen = false;
     render();
-    showToast('복원됐어요');
+    const parts = [];
+    if(toAdd.length) parts.push(`${toAdd.length}건 추가`);
+    if(updatedCount) parts.push(`${updatedCount}건 업데이트`);
+    showToast(parts.length ? parts.join(', ') + '됐어요' : '변경된 내용이 없어요');
   }
   function doRestoreReplace(payload){
     items = payload.items;
@@ -2622,7 +2633,7 @@
     return sorted;
   }
   function renderTimeGrid(jd){
-    const rawTasks = [...tasksForDate(jd, 'todo'), ...tasksForDate(jd, 'issue')]; // 완료 여부와 무관하게 시간표엔 계속 남겨둠 — 체크했다고 "그 시간에 안 한 일"이 되는 게 아니니까
+    const rawTasks = journalTasks.filter(t => (t.category === 'todo' || t.category === 'issue') && taskAppliesToDate(t, jd) && isLinkedTaskStillRelevant(t)); // 완료 여부와 무관하게 시간표엔 계속 남겨둠 — 체크했다고 "그 시간에 안 한 일"이 되는 게 아니니까
     const blocks = [];
     const DEADLINE_LEAD_MIN = 120; // 마감 몇 분 전부터 일정에 미리 꽂아둘지 (지금은 2시간)
     const LATE_DEADLINE_CUTOFF_MIN = 20 * 60; // 이 시각 이후 마감은 시간표에 굳이 안 꽂음(업무기록 목록에만 표시) — 밤 시간대에 조각처럼 떠봤자 실효성이 없음
