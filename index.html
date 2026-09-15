@@ -335,6 +335,7 @@
   .journal-done-toggle:hover{color:var(--ink-soft);}
   .journal-task-row{display:flex;align-items:center;gap:10px;padding:11px 2px;}
   .journal-task-row input[type=checkbox]{width:17px;height:17px;accent-color:var(--brand);cursor:pointer;flex-shrink:0;}
+  .journal-recur-static-icon{width:17px;flex-shrink:0;text-align:center;font-size:13px;opacity:0.75;}
   .journal-task-input{flex:1;}
   .journal-task-row.is-done .journal-task-input{text-decoration:line-through;color:var(--ink-faint);}
   .journal-recur-select{
@@ -451,6 +452,9 @@
   }
   .time-grid-v-block:hover{transform:translateY(-1px);box-shadow:0 5px 12px -3px rgba(35,46,41,0.26);z-index:3;}
   .time-grid-v-block.is-deadline-marker{border-style:dashed;border-width:1px;border-left-width:3px;box-shadow:none;}
+  .time-grid-v-block.is-done{opacity:0.55;box-shadow:none;}
+  .time-grid-v-block.is-done .time-grid-v-block-label{text-decoration:line-through;}
+  .time-grid-v-block-check{flex-shrink:0;color:var(--brand);font-weight:800;}
   .time-grid-v-block-line{display:flex;align-items:center;gap:5px;width:100%;overflow:hidden;white-space:nowrap;}
   .time-grid-v-block-icon{flex-shrink:0;}
   .time-grid-v-block-label{font-weight:700;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}
@@ -654,6 +658,8 @@
   .journal-memo-btn:hover{opacity:0.8;}
   .journal-memo-btn.has-memo{opacity:1;}
   .journal-memo-edit-row{display:flex;gap:8px;margin-bottom:10px;}
+  .journal-memo-done-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px;color:var(--ink-soft);cursor:pointer;}
+  .journal-memo-done-row input[type=checkbox]{width:16px;height:16px;accent-color:var(--brand);cursor:pointer;}
   .journal-memo-edit-row .journal-cat-select,
   .journal-memo-edit-row .journal-time-input,
   .journal-memo-edit-row .journal-recur-select{border-color:var(--line);background:var(--surface);}
@@ -1112,7 +1118,7 @@
           if(status === 'submitted') ensureSelectionReminder(item);
           itemsChanged = true;
         }
-      }else if(status === 'submitted'){
+      }else if(!task.linkedItemId && status === 'submitted'){
         // 링크 안 된 일반 할일/팔로우업은 상태값 개념이 없어서, "완료로"만 done 처리로 갈음
         if(!task.recurrence){ task.done = true; task.completedDate = journalDate; }
         else{ if(!task.doneDates) task.doneDates = {}; task.doneDates[journalDate] = true; }
@@ -1125,13 +1131,29 @@
     render();
     showToast('선택한 항목을 반영했어요');
   }
+  function bulkJournalSetSelection(value){
+    if(journalSelectedIds.size === 0) return;
+    let itemsChanged = false;
+    journalSelectedIds.forEach(id => {
+      const task = journalTasks.find(t => t.id === id);
+      if(!task || task.linkedType !== 'selection' || !task.linkedItemId) return;
+      const item = items.find(i => i.id === task.linkedItemId);
+      if(item){ item.selection = value; itemsChanged = true; }
+    });
+    if(itemsChanged) persist();
+    journalSelectedIds.clear();
+    render();
+    showToast('선정 여부를 반영했어요');
+  }
   function bulkJournalDelete(){
     if(journalSelectedIds.size === 0) return;
     confirmModal = { message: `선택한 ${journalSelectedIds.size}건을 삭제할까요?`, type: 'bulkJournalDelete', payload: null, confirmLabel: '삭제' };
     render();
   }
   function doBulkJournalDelete(){
+    const removed = journalTasks.filter(t => journalSelectedIds.has(t.id));
     journalTasks = journalTasks.filter(t => !journalSelectedIds.has(t.id));
+    if(removed.length) scheduleJournalUndo(removed, `${removed.length}건 삭제됨`);
     persistJournalTasks();
     journalSelectedIds.clear();
     render();
@@ -2398,10 +2420,10 @@
   function taskAppliesToDate(task, jd){
     if(!task.recurrence){
       if(task.createdDate && jd < task.createdDate) return false; // 지정한 날짜 되기 전엔 안 보임
-      // 시각이 정해진 항목(미팅/컨택 등 특정 시간에 일어나는 일)은 그 날 하루만 유효함 — 시각 없는
-      // 순수 할일만 완료 전까지 매일 이월되게 함. 안 그러면 하루짜리 미팅이 체크 안 하면 계속 매일 떠서
-      // 마치 "매일 반복"인 것처럼 보이는 문제가 있었음
-      if(task.time) return jd === task.createdDate;
+      // 미팅/컨택처럼 "특정 시각에 실제로 일어나는 일"만 그 날 하루로 끝냄. 할일/제안/검토처럼
+      // 시작 시각을 참고용으로만 넣어둔 실제 작업거리는, 다른 할일과 똑같이 완료 전까지 계속 이월돼야 함
+      // (전에 이걸 시각 있는 항목 전부에 적용했다가, 안 끝난 작업까지 통째로 안 보이게 됐던 문제가 있었음)
+      if(task.time && (task.taskType === 'meeting' || task.taskType === 'call')) return jd === task.createdDate;
       return true; // 그 날짜부터는 완료 전까지 매일 계속 보임(이월)
     }
     if(task.recurrence.until && jd > task.recurrence.until) return false; // 반복 종료일이 지나면 더 이상 안 보임
@@ -2421,7 +2443,10 @@
     if(!task.linkedItemId) return true;
     const item = items.find(i => i.id === task.linkedItemId);
     if(!item) return false;
-    if(task.linkedType === 'deadline' || task.linkedType === 'overdue') return (item.status||'pending') === 'pending';
+    // "마감"(deadline)은 오늘이 진짜 마감일일 때만 유효함 — 날짜가 지나면 "지난마감"(overdue)이 새로
+    // 만들어지면서 이 옛날 마감 리마인더는 자동으로 완료 처리돼서 사라짐 (둘이 동시에 안 뜨게)
+    if(task.linkedType === 'deadline') return (item.status||'pending') === 'pending' && item.deadline === todayISO();
+    if(task.linkedType === 'overdue') return (item.status||'pending') === 'pending';
     if(task.linkedType === 'setup') return isPrepping(item);
     if(task.linkedType === 'selection') return item.status === 'submitted' && item.selection === 'pending';
     return true;
@@ -2436,7 +2461,8 @@
     return journalTasks.filter(t => t.category === category && taskAppliesToDate(t, jd) && !isTaskDoneOnDate(t, jd) && isLinkedTaskStillRelevant(t));
   }
   function doneTasksForDate(jd, category){
-    return journalTasks.filter(t => t.category === category && taskAppliesToDate(t, jd) && (isTaskDoneOnDate(t, jd) || isLinkedTaskEffectivelyDone(t)));
+    return journalTasks.filter(t => t.category === category && taskAppliesToDate(t, jd) &&
+      (isTaskDoneOnDate(t, jd) || (isLinkedTaskEffectivelyDone(t) && jd === t.createdDate)));
   }
   function wasCompletedOnDate(task, jd){
     if(!task.recurrence) return !!task.done && task.completedDate === jd;
@@ -2472,6 +2498,8 @@
       const ddayInfo = journalLinkedDdayInfo(linkedItem, task.linkedType);
       // 마감/지난마감 리마인더는 굳이 수정 페이지 안 들어가도, 여기서 바로 "제출완료"로 처리할 수 있게 함
       const canQuickComplete = !linkedDone && (task.linkedType === 'deadline' || task.linkedType === 'overdue');
+      // 선정확인 리마인더도 똑같이 여기서 바로 선정/미선정 처리 가능하게 함
+      const canQuickSelect = !linkedDone && task.linkedType === 'selection';
       return `
         <div class="${rowClass}">
           <input type="checkbox" ${(done || journalSelectedIds.has(task.id))?'checked':''} ${linkedDone?'disabled title="프로모션 항목 자체를 다시 진행중으로 바꿔야 해요"':''} onchange="${done ? `App.toggleJournalTaskDone('${task.id}', '${jd}')` : `App.toggleJournalSelectItem('${task.id}')`}" />
@@ -2485,6 +2513,10 @@
             ${ddayInfo ? `<span class="dday-mini dday-${urgencyClass(ddayInfo.n)}" title="${escapeHtml(ddayInfo.label)}">${ddayLabel(ddayInfo.n)}</span>` : ''}
           </div>
           ${canQuickComplete ? `<span class="icon-btn" title="수정 페이지 안 열고 바로 제출완료 처리" onclick="event.stopPropagation();App.quickMarkItemSubmitted('${linkedItem.id}')">✅</span>` : ''}
+          ${canQuickSelect ? `
+            <span class="icon-btn" title="선정됨으로 표시" onclick="event.stopPropagation();App.quickMarkItemSelection('${linkedItem.id}','selected')">✅</span>
+            <span class="icon-btn" title="미선정으로 표시" onclick="event.stopPropagation();App.quickMarkItemSelection('${linkedItem.id}','rejected')">❌</span>
+          ` : ''}
           <span class="journal-memo-btn ${task.notes?'has-memo':''}" onclick="event.stopPropagation();App.openTaskMemo('${task.id}')" title="메모">📝</span>
           <span class="setup-task-remove" onclick="App.removeJournalTask('${task.id}')">✕</span>
         </div>
@@ -2492,7 +2524,9 @@
     }
     return `
       <div class="${rowClass}">
-        <input type="checkbox" ${(done || journalSelectedIds.has(task.id))?'checked':''} onchange="${done ? `App.toggleJournalTaskDone('${task.id}', '${jd}')` : `App.toggleJournalSelectItem('${task.id}')`}" />
+        ${task.recurrence
+          ? `<span class="journal-recur-static-icon" title="반복 업무 — 따로 체크 안 해도 돼요">🔁</span>`
+          : `<input type="checkbox" ${done?'checked':''} onchange="App.toggleJournalTaskDone('${task.id}', '${jd}')" />`}
         <span class="star-toggle ${task.starred?'is-starred':''}" onclick="App.toggleJournalTaskStar('${task.id}')" title="중요 표시">${task.starred?'★':'☆'}</span>
         <div class="journal-linked-content" onclick="App.openTaskMemo('${task.id}')">
           <span class="journal-cat-tag journal-cat-${task.category}">${task.category==='issue'?'팔로우업':'할일'}</span>
@@ -2588,7 +2622,7 @@
     return sorted;
   }
   function renderTimeGrid(jd){
-    const rawTasks = [...tasksForDate(jd, 'todo'), ...tasksForDate(jd, 'issue')].filter(t => !isTaskDoneOnDate(t, jd));
+    const rawTasks = [...tasksForDate(jd, 'todo'), ...tasksForDate(jd, 'issue')]; // 완료 여부와 무관하게 시간표엔 계속 남겨둠 — 체크했다고 "그 시간에 안 한 일"이 되는 게 아니니까
     const blocks = [];
     const DEADLINE_LEAD_MIN = 120; // 마감 몇 분 전부터 일정에 미리 꽂아둘지 (지금은 2시간)
     const LATE_DEADLINE_CUTOFF_MIN = 20 * 60; // 이 시각 이후 마감은 시간표에 굳이 안 꽂음(업무기록 목록에만 표시) — 밤 시간대에 조각처럼 떠봤자 실효성이 없음
@@ -2616,7 +2650,8 @@
       if(clippedEnd <= TIME_GRID_START_MIN || clippedStart >= TIME_GRID_END_MIN) return; // 시간표 범위 밖
       const label = linkedItem ? (linkedItem.title || linkedItem.content) : (t.text || '(내용 없음)');
       const extendsPastView = endMin > TIME_GRID_END_MIN; // 마감이 자정 근처 등 22시 이후라 시간표 끝에서 잘림
-      blocks.push({ task: t, startMin: clippedStart, endMin: Math.max(clippedEnd, clippedStart+12), realEndMin: endMin, label, isLinked: !!linkedItem, isDeadlineMarker, extendsPastView, channel: linkedItem ? linkedItem.channel : null, kind: t.category==='issue' ? 'issue' : (t.taskType||'todo') });
+      const isDone = isTaskDoneOnDate(t, jd) || isLinkedTaskEffectivelyDone(t);
+      blocks.push({ task: t, startMin: clippedStart, endMin: Math.max(clippedEnd, clippedStart+12), realEndMin: endMin, label, isLinked: !!linkedItem, isDeadlineMarker, extendsPastView, isDone, channel: linkedItem ? linkedItem.channel : null, kind: t.category==='issue' ? 'issue' : (t.taskType||'todo') });
     });
     // 일정이 없어도 시간표 축은 항상 고정으로 떠 있게 함 (있다없다 왔다갔다 하지 않게)
     const packed = blocks.length ? packTimeGridLanes(blocks) : [];
@@ -2682,8 +2717,8 @@
         const channelPrefix = b.channel ? `[${b.channel}] ` : '';
         const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(timeLabel)}${deadlineSuffix}${continues ? ' (계속 이어짐)' : ''} ${channelPrefix}${escapeHtml(b.label)}${b.task.notes ? ' — ' + escapeHtml(b.task.notes) : ''}`;
         // 세로형은 열 전체 폭(또는 레인만큼)을 쓰니까 채널명은 폭 걱정 없이 항상 같이 보여줌
-        return `<div class="time-grid-v-block ${kindClass} ${b.isDeadlineMarker?'is-deadline-marker':''}" style="top:${topPx}px;height:${heightPx-3}px;left:${leftPct}%;width:calc(${widthPct}% - 4px);" onclick="${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
-          <div class="time-grid-v-block-line"><span class="time-grid-v-block-icon">${icon}</span>${b.channel ? `<span class="time-grid-h-block-channel">[${escapeHtml(b.channel)}]</span>` : ''}<span class="time-grid-v-block-label">${escapeHtml(b.label)}</span>${starHtml}${startsHtml}${extendsHtml}</div>
+        return `<div class="time-grid-v-block ${kindClass} ${b.isDeadlineMarker?'is-deadline-marker':''} ${b.isDone?'is-done':''}" style="top:${topPx}px;height:${heightPx-3}px;left:${leftPct}%;width:calc(${widthPct}% - 4px);" onclick="${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
+          <div class="time-grid-v-block-line">${b.isDone ? '<span class="time-grid-v-block-check">✓</span>' : `<span class="time-grid-v-block-icon">${icon}</span>`}${b.channel ? `<span class="time-grid-h-block-channel">[${escapeHtml(b.channel)}]</span>` : ''}<span class="time-grid-v-block-label">${escapeHtml(b.label)}</span>${starHtml}${startsHtml}${extendsHtml}</div>
         </div>`;
       }).join('');
       return `
@@ -2728,9 +2763,10 @@
     const kindIcon = linkedItem ? '' : journalTaskKindIcon(task) + ' ';
     return `
       <label class="journal-compact-row ${done?'is-done':''} ${accentClass}">
-        <input type="checkbox" ${done?'checked':''} onchange="${done ? `App.toggleJournalTaskDone('${task.id}', '${dateStr}')` : `App.openTaskCheckAction('${task.id}', '${dateStr}')`}" />
+        ${task.recurrence
+          ? `<span class="journal-recur-static-icon" title="반복 업무 — 따로 체크 안 해도 돼요">🔁</span>`
+          : `<input type="checkbox" ${done?'checked':''} onchange="${(done || !linkedItem) ? `App.toggleJournalTaskDone('${task.id}', '${dateStr}')` : `App.openTaskCheckAction('${task.id}', '${dateStr}')`}" />`}
         <span class="journal-compact-text" style="${linkedItem?'cursor:pointer;':''}"${clickAttr}>${timePrefix}${kindIcon}${escapeHtml(label)}</span>
-        ${task.recurrence ? `<span title="반복 업무">🔁</span>` : ''}
         ${task.notes ? `<span class="journal-compact-memo-dot" title="메모 있음">📝</span>` : ''}
         ${ddayInfo ? `<span class="dday-mini dday-${urgencyClass(ddayInfo.n)}" title="${escapeHtml(ddayInfo.label)}">${ddayLabel(ddayInfo.n)}</span>` : ''}
       </label>
@@ -2761,7 +2797,11 @@
   }
   function addJournalTask(category){
     const id = 'jt_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
-    persistJournalTasks();
+    journalTasks.push({
+      id, text:'', category, taskType:'todo', recurrence:null, done:false, doneDates:{},
+      createdDate: journalDate, time:'', notes:'', dueDate:'', completedDate:null
+    });
+    // 빈 채로 바로 저장하지 않음 — 메모 팝업에서 실제로 채우고 "저장" 눌러야 커밋됨 (안 채우고 닫으면 그냥 사라짐)
     openTaskMemo(id, true); // 항목 추가하자마자 바로 상세 입력창이 뜨게 해서, 목록에서 빈 줄 클릭하는 한 단계를 줄임
   }
   function setJournalTaskKind(id, kind){
@@ -2782,13 +2822,6 @@
     task.text = value;
     journalMemoDirty = true;
     // 타이핑할 때마다 저장하지 않고, 메모 팝업의 "저장" 버튼을 눌러야 커밋되게 함
-  }
-  function updateJournalTaskCategory(id, value){
-    const task = journalTasks.find(t => t.id === id);
-    if(!task) return;
-    task.category = value === 'issue' ? 'issue' : 'todo';
-    persistJournalTasks();
-    render();
   }
   function updateJournalTaskTime(id, value){
     const task = journalTasks.find(t => t.id === id);
@@ -2891,6 +2924,14 @@
     persist();
     render();
     showToast(`"${item.title || item.content}" 제출완료로 표시했어요`);
+  }
+  function quickMarkItemSelection(itemId, value){
+    const item = items.find(i => i.id === itemId);
+    if(!item) return;
+    item.selection = value;
+    persist();
+    render();
+    showToast(`"${item.title || item.content}" ${value === 'selected' ? '선정' : '미선정'}으로 표시했어요`);
   }
   function setJournalTaskRecurrence(id, value){
     const task = journalTasks.find(t => t.id === id);
@@ -3019,6 +3060,7 @@
     });
     persistJournalTasks();
     render();
+    if(candidates.length) showToast(`${candidates.length}건을 할일에 가져왔어요`);
   }
   async function persistManagedChannels(){
     try{
@@ -4993,7 +5035,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         const doneKey = `${jd}|${category}`;
         const doneExpanded = journalDoneExpanded.has(doneKey);
         html += `<div class="journal-section">
-          <div class="journal-section-label">${label}${tipHtml ? ' '+infoTip(tipHtml, 260) : ''} <span style="font-weight:400;color:var(--ink-faint);font-size:11.5px;">(체크 전까진 다음 날에도 계속 보여요)</span></div>
+          <div class="journal-section-label">${label}${tipHtml ? ' '+infoTip(tipHtml, 260) : ''}</div>
           ${urgentTasks.length ? `
             <div class="journal-subgroup-label journal-subgroup-urgent">🔴 오늘/지난 마감 · D-day 급한 순</div>
             <div class="journal-list">${urgentTasks.map(task => journalTaskRowHtml(task, jd, placeholder, taskUrgencyN(task) < 0 ? 'task-row-urgent-overdue' : 'task-row-urgent-today')).join('')}</div>
@@ -5018,6 +5060,10 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
           const t = journalTasks.find(t => t.id === id);
           return t && t.linkedItemId && (t.linkedType === 'deadline' || t.linkedType === 'overdue');
         });
+        const hasSelectionSelected = Array.from(journalSelectedIds).some(id => {
+          const t = journalTasks.find(t => t.id === id);
+          return t && t.linkedItemId && t.linkedType === 'selection';
+        });
         html += `<div class="bulk-bar">
           <span class="bulk-count">${journalSelectedIds.size}건 선택됨</span>
           <div class="bulk-actions">
@@ -5027,6 +5073,10 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
               <button class="bulk-btn bulk-btn-na" onclick="App.bulkJournalSetStatus('na')">해당없음</button>
               <button class="bulk-btn bulk-btn-pending" onclick="App.bulkJournalSetStatus('pending')">대기중</button>
             ` : ''}
+            ${hasSelectionSelected ? `
+              <button class="bulk-btn bulk-btn-submitted" onclick="App.bulkJournalSetSelection('selected')">✓ 선정</button>
+              <button class="bulk-btn bulk-btn-missed" onclick="App.bulkJournalSetSelection('rejected')">❌ 미선정</button>
+            ` : ''}
             <span class="bulk-sep"></span>
             <button class="bulk-btn bulk-btn-delete" onclick="App.bulkJournalDelete()">🗑 삭제</button>
             <button class="bulk-btn bulk-btn-clear" onclick="App.clearJournalSelection()">해제</button>
@@ -5034,7 +5084,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         </div>`;
       }
       journalTaskSection('todo', '📌 업무 기록', '내용을 입력하세요',
-        `<b>이렇게 써보세요</b><br>+ 항목 추가 누르면 바로 입력창이 떠요.<br>• 종류(할일/미팅/제안/컨택/검토) 선택 가능<br>• 🔴빨간 배경 = 오늘·지난 마감<br>• 🔁녹색 배경 = 반복 업무<br>• 시각·반복(매일/매주/매월) 설정 가능<br>• 체크하면 완료/삭제 선택창이 떠요`);
+        `<b>이렇게 써보세요</b><br>+ 항목 추가 누르면 바로 입력창이 떠요.<br>• 종류(할일/미팅/제안/컨택/검토) 선택 가능<br>• 🔴빨간 배경 = 오늘·지난 마감<br>• 🔁녹색 배경 = 반복 업무(체크 없이 그날의 리마인더로만 표시)<br>• 미팅/컨택은 그 날 하루만 표시되고, 나머지 할일은 완료 전까지 계속 이월돼요<br>• 체크하면 바로 완료 처리돼요`);
       journalTaskSection('issue', '👀 팔로우업', '예: 카카오톡딜 쿠폰 예산 초과 — 계속 확인 필요',
         `<b>이렇게 써보세요</b><br>하루 이틀에 안 끝나고 계속 지켜봐야 하는 문제를 적어두는 곳이에요.<br>완전히 해결됐을 때만 체크하시면 돼요.`);
 
@@ -5719,6 +5769,12 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                 <span class="journal-type-chip ${memoTask.category==='todo'&&memoTask.taskType==='review'?'journal-type-chip-active':''}" onclick="App.setJournalTaskKind('${memoTask.id}', 'review')">📋 검토</span>
                 <span class="journal-type-chip ${memoTask.category==='issue'?'journal-type-chip-active journal-type-chip-issue':''}" onclick="App.setJournalTaskKind('${memoTask.id}', 'issue')">👀 팔로우업</span>
               </div>
+              ${!memoTask.recurrence ? `
+                <label class="journal-memo-done-row">
+                  <input type="checkbox" ${memoTask.done?'checked':''} onchange="App.toggleJournalTaskDone('${memoTask.id}', '${journalDate}')" />
+                  완료 처리
+                </label>
+              ` : ''}
               <div class="journal-memo-edit-row">
                 <select class="journal-time-input" onchange="App.updateJournalTaskTime('${memoTask.id}', this.value)" title="시작 시각">${timeSelectOptions(memoTask.time)}</select>
                 <span style="color:var(--ink-faint);">~</span>
@@ -5918,6 +5974,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     toggleJournalSelectItem,
     clearJournalSelection,
     bulkJournalSetStatus,
+    bulkJournalSetSelection,
     bulkJournalDelete,
     setJournalSearchQuery,
     toggleJournalDoneExpanded,
@@ -5943,6 +6000,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     toggleItemStar,
     toggleJournalTaskStar,
     quickMarkItemSubmitted,
+    quickMarkItemSelection,
     setJournalTaskRecurrence,
     toggleJournalTaskRecurCustomDay,
     updateJournalTaskRecurUntil,
