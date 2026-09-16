@@ -1435,6 +1435,10 @@
   }
 
   function restoreBackup(mode){
+    if(!backupImportText || !backupImportText.trim()){
+      showToast('먼저 백업 JSON을 붙여넣어주세요');
+      return;
+    }
     let parsed;
     try{
       parsed = JSON.parse(backupImportText.trim());
@@ -5411,7 +5415,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
           </div>
           <div class="modal-footer">
             <button class="btn btn-ghost" onclick="App.closeModal()">취소</button>
-            <button class="btn btn-primary" ${backupImportText.trim() ? '' : 'disabled'} onclick="App.restoreBackup('merge');App.closeModal();">병합해서 추가</button>
+            <button class="btn btn-primary" onclick="App.restoreBackup('merge');App.closeModal();">병합해서 추가</button>
           </div>
         `;
       }else{
