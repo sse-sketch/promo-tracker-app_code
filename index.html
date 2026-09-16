@@ -451,6 +451,10 @@
     display:flex;align-items:flex-start;
   }
   .time-grid-v-block:hover{transform:translateY(-1px);box-shadow:0 5px 12px -3px rgba(35,46,41,0.26);z-index:3;}
+  .time-grid-v-block.is-draggable{cursor:grab;}
+  .time-grid-v-block.is-draggable:active{cursor:grabbing;}
+  .time-grid-v-block-resize{position:absolute;left:0;right:0;bottom:0;height:6px;cursor:ns-resize;}
+  .time-grid-v-block-resize:hover{background:rgba(0,0,0,0.08);}
   .time-grid-v-block.is-deadline-marker{border-style:dashed;border-width:1px;border-left-width:3px;box-shadow:none;}
   .time-grid-v-block.is-done{opacity:0.55;box-shadow:none;}
   .time-grid-v-block.is-done .time-grid-v-block-label{text-decoration:line-through;}
@@ -2670,7 +2674,13 @@
     return sorted;
   }
   function renderTimeGrid(jd){
-    const rawTasks = journalTasks.filter(t => (t.category === 'todo' || t.category === 'issue') && taskAppliesToDate(t, jd) && isLinkedTaskStillRelevant(t)); // 완료 여부와 무관하게 시간표엔 계속 남겨둠 — 체크했다고 "그 시간에 안 한 일"이 되는 게 아니니까
+    const rawTasks = journalTasks.filter(t => {
+      if(t.category !== 'todo' && t.category !== 'issue') return false;
+      if(!taskAppliesToDate(t, jd) || !isLinkedTaskStillRelevant(t)) return false;
+      // 완료된 건 "완료한 바로 그날"에만 시간표에 남아있어야 함 — 안 그러면 그 이후 모든 날짜에 계속 나타남
+      if(!t.recurrence && t.done) return t.completedDate === jd;
+      return true;
+    });
     const blocks = [];
     const DEADLINE_LEAD_MIN = 120; // 마감 몇 분 전부터 일정에 미리 꽂아둘지 (지금은 2시간)
     const LATE_DEADLINE_CUTOFF_MIN = 20 * 60; // 이 시각 이후 마감은 시간표에 굳이 안 꽂음(업무기록 목록에만 표시) — 밤 시간대에 조각처럼 떠봤자 실효성이 없음
@@ -2765,8 +2775,12 @@
         const channelPrefix = b.channel ? `[${b.channel}] ` : '';
         const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(timeLabel)}${deadlineSuffix}${continues ? ' (계속 이어짐)' : ''} ${channelPrefix}${escapeHtml(b.label)}${b.task.notes ? ' — ' + escapeHtml(b.task.notes) : ''}`;
         // 세로형은 열 전체 폭(또는 레인만큼)을 쓰니까 채널명은 폭 걱정 없이 항상 같이 보여줌
-        return `<div class="time-grid-v-block ${kindClass} ${b.isDeadlineMarker?'is-deadline-marker':''} ${b.isDone?'is-done':''}" style="top:${topPx}px;height:${heightPx-3}px;left:${leftPct}%;width:calc(${widthPct}% - 4px);" onclick="${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
+        // 프로모션에 연결된 항목(마감 등)이나 마감리드타임 마커는 시간이 항목 상태에서 자동으로 나오는 거라
+        // 드래그로 옮기는 게 의미가 없음 — 직접 만든 할일/미팅만 드래그로 옮기고 늘릴 수 있게 함
+        const draggable = !b.isLinked && !b.isDeadlineMarker;
+        return `<div class="time-grid-v-block ${kindClass} ${b.isDeadlineMarker?'is-deadline-marker':''} ${b.isDone?'is-done':''} ${draggable?'is-draggable':''}" data-half-start="${half.start}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${heightPx-3}px;left:${leftPct}%;width:calc(${widthPct}% - 4px);" ${draggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
           <div class="time-grid-v-block-line">${b.isDone ? '<span class="time-grid-v-block-check">✓</span>' : `<span class="time-grid-v-block-icon">${icon}</span>`}${b.channel ? `<span class="time-grid-h-block-channel">[${escapeHtml(b.channel)}]</span>` : ''}<span class="time-grid-v-block-label">${escapeHtml(b.label)}</span>${starHtml}${startsHtml}${extendsHtml}</div>
+          ${draggable ? `<div class="time-grid-v-block-resize" onmousedown="App.startBlockDrag(event, '${b.task.id}', 'resize')" title="드래그해서 길이 조절"></div>` : ''}
         </div>`;
       }).join('');
       return `
@@ -2831,6 +2845,77 @@
     });
     // 빈 채로 바로 저장하지 않음 — 메모 팝업에서 실제로 채우고 "저장" 눌러야 커밋됨 (안 채우고 닫으면 그냥 사라짐)
     openTaskMemo(id, true); // 구글캘린더처럼 시간표의 빈 곳 클릭하면 그 시각으로 바로 입력창이 뜨게
+  }
+  // 시간표 블록 드래그로 이동/길이조절 — 매 픽셀마다 다시 그리면 느리고 깜빡이니, 드래그 중엔 그 블록의
+  // style만 직접 옮기고, 손을 뗐을 때(mouseup) 딱 한 번만 실제 데이터에 반영 + 다시 그림
+  let blockDragState = null;
+  let blockJustDragged = false; // 드래그 끝나자마자 따라오는 click 이벤트가 팝업을 열어버리지 않게 막는 용도
+  function wasBlockDragged(){
+    if(blockJustDragged){ blockJustDragged = false; return true; }
+    return false;
+  }
+  function startBlockDrag(evt, taskId, mode){
+    evt.preventDefault();
+    evt.stopPropagation();
+    const blockEl = evt.currentTarget.closest ? evt.currentTarget.closest('.time-grid-v-block') : evt.target.closest('.time-grid-v-block');
+    if(!blockEl) return;
+    blockDragState = {
+      taskId, mode,
+      moved: false,
+      startY: evt.clientY,
+      startTop: parseFloat(blockEl.style.top),
+      startHeight: parseFloat(blockEl.style.height),
+      halfStartMin: parseFloat(blockEl.dataset.halfStart),
+      totalMin: parseFloat(blockEl.dataset.totalMin),
+      colHeight: parseFloat(blockEl.dataset.colHeight),
+      blockEl
+    };
+    document.addEventListener('mousemove', onBlockDragMove);
+    document.addEventListener('mouseup', onBlockDragEnd);
+  }
+  function onBlockDragMove(evt){
+    if(!blockDragState) return;
+    const dy = evt.clientY - blockDragState.startY;
+    if(Math.abs(dy) > 3) blockDragState.moved = true;
+    if(!blockDragState.moved) return;
+    if(blockDragState.mode === 'move'){
+      blockDragState.blockEl.style.top = (blockDragState.startTop + dy) + 'px';
+    }else{
+      const newHeight = Math.max(16, blockDragState.startHeight + dy);
+      blockDragState.blockEl.style.height = newHeight + 'px';
+    }
+  }
+  function onBlockDragEnd(evt){
+    document.removeEventListener('mousemove', onBlockDragMove);
+    document.removeEventListener('mouseup', onBlockDragEnd);
+    if(!blockDragState) return;
+    const st = blockDragState;
+    blockDragState = null;
+    if(!st.moved) return; // 그냥 클릭이었으면 아무것도 안 바꿈(팝업 열리는 건 원래 onclick이 처리)
+    blockJustDragged = true;
+    const task = journalTasks.find(t => t.id === st.taskId);
+    if(!task){ render(); return; }
+    const minPerPx = st.totalMin / st.colHeight;
+    if(st.mode === 'move'){
+      const dy = evt.clientY - st.startY;
+      let newStartMin = st.halfStartMin + (st.startTop + dy) * minPerPx;
+      newStartMin = Math.max(TIME_GRID_START_MIN, Math.min(TIME_GRID_END_MIN - 30, Math.round(newStartMin / 30) * 30));
+      const oldStartMin = timeToMinutes(task.time);
+      const oldEndMin = timeToMinutes(task.endTime);
+      const durationMin = (oldStartMin !== null && oldEndMin !== null && oldEndMin > oldStartMin) ? (oldEndMin - oldStartMin) : 30;
+      const newEndMin = Math.min(TIME_GRID_END_MIN, newStartMin + durationMin);
+      task.time = `${String(Math.floor(newStartMin/60)).padStart(2,'0')}:${String(newStartMin%60).padStart(2,'0')}`;
+      task.endTime = `${String(Math.floor(newEndMin/60)).padStart(2,'0')}:${String(newEndMin%60).padStart(2,'0')}`;
+    }else{
+      const dy = evt.clientY - st.startY;
+      const newHeightPx = Math.max(16, st.startHeight + dy);
+      const startMin = timeToMinutes(task.time) || st.halfStartMin;
+      let newDurationMin = Math.max(30, Math.round((newHeightPx * minPerPx) / 30) * 30);
+      const newEndMin = Math.min(TIME_GRID_END_MIN, startMin + newDurationMin);
+      task.endTime = `${String(Math.floor(newEndMin/60)).padStart(2,'0')}:${String(newEndMin%60).padStart(2,'0')}`;
+    }
+    persistJournalTasks();
+    render();
   }
   // 시간표에서 이미 있는 블록이 아니라 빈 곳을 클릭했을 때만 동작 — 클릭한 세로 위치를 시각으로 환산(30분 단위로 스냅)
   function handleTimeGridTrackClick(evt, jd, halfStartMin, totalMin, colHeight){
@@ -2902,6 +2987,13 @@
     const task = journalTasks.find(t => t.id === id);
     if(!task) return;
     task.dueDate = value;
+    journalMemoDirty = true;
+    render();
+  }
+  function updateJournalTaskCreatedDate(id, value){
+    const task = journalTasks.find(t => t.id === id);
+    if(!task || !value) return;
+    task.createdDate = value;
     journalMemoDirty = true;
     render();
   }
@@ -5818,6 +5910,10 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                 <span class="journal-type-chip ${memoTask.category==='todo'&&memoTask.taskType==='review'?'journal-type-chip-active':''}" onclick="App.setJournalTaskKind('${memoTask.id}', 'review')">📋 검토</span>
                 <span class="journal-type-chip ${memoTask.category==='issue'?'journal-type-chip-active journal-type-chip-issue':''}" onclick="App.setJournalTaskKind('${memoTask.id}', 'issue')">👀 팔로우업</span>
               </div>
+              <div class="journal-memo-due">
+                <label>날짜</label>
+                <input type="date" value="${escapeHtml(memoTask.createdDate||journalDate)}" onchange="App.updateJournalTaskCreatedDate('${memoTask.id}', this.value)" />
+              </div>
               ${!memoTask.recurrence ? `
                 <label class="journal-memo-done-row">
                   <input type="checkbox" ${memoTask.done?'checked':''} onchange="App.toggleJournalTaskDone('${memoTask.id}', '${journalDate}')" />
@@ -6030,6 +6126,8 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     addJournalTask,
     addJournalTaskAtTime,
     handleTimeGridTrackClick,
+    startBlockDrag,
+    wasBlockDragged,
     updateJournalTaskText,
     setJournalTaskKind,
     updateJournalTaskTime,
@@ -6038,6 +6136,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     saveJournalMemoNow,
     deleteJournalTaskFromMemo,
     updateJournalTaskDueDate,
+    updateJournalTaskCreatedDate,
     openTaskMemo,
     openNewChannelPrompt,
     updateNewChannelDraft,
