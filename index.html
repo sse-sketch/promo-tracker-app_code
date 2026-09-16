@@ -441,6 +441,7 @@
   .time-grid-v-track{flex:1;position:relative;border-radius:6px;transition:background .1s ease;}
   .time-grid-v-track:hover{background:rgba(122,110,90,0.05);}
   .time-grid-v-lunch{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,rgba(136,135,128,0.10),rgba(136,135,128,0.10) 6px,rgba(136,135,128,0.04) 6px,rgba(136,135,128,0.04) 12px);border-top:1px dashed var(--ink-faint);border-bottom:1px dashed var(--ink-faint);z-index:0;}
+  .time-grid-v-offhours{position:absolute;left:0;right:0;background:rgba(120,115,105,0.06);z-index:0;pointer-events:none;}
   .time-grid-v-lunch-label{position:absolute;top:2px;left:4px;font-size:9.5px;color:var(--ink-faint);white-space:nowrap;}
   .time-grid-v-now{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--urgent);z-index:5;}
   .time-grid-now-dot{position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:50%;background:var(--urgent);box-shadow:0 0 0 3px rgba(175,74,65,0.18);}
@@ -2647,6 +2648,9 @@
   // 점심시간 — 달마다 바뀔 수 있어서 여기 숫자만 바꾸면 돼요 (지금은 12:00~13:00)
   const LUNCH_START_MIN = 12 * 60;
   const LUNCH_END_MIN = 13 * 60;
+  // 공식 근무시간 — 이 밖의 시간대는 시간표에서 살짝 흐리게 표시함 (지금은 08:00~17:00)
+  const WORK_START_MIN = 8 * 60;
+  const WORK_END_MIN = 17 * 60;
   function timeToMinutes(t){
     const norm = normalizeTime(t);
     if(!norm) return null;
@@ -2754,6 +2758,17 @@
       const lunchHtml = (lunchEnd > lunchStart)
         ? `<div class="time-grid-v-lunch" style="top:${((lunchStart-half.start)/totalMin)*colHeight}px;height:${((lunchEnd-lunchStart)/totalMin)*colHeight}px;"><span class="time-grid-v-lunch-label">🍚 점심</span></div>`
         : '';
+      // 근무시간(08~17시) 밖은 살짝 흐리게 — 시작 전(예: 07~08시)이랑 끝난 후(예: 17~21시) 둘 다 해당될 수 있음
+      const offHoursBands = [];
+      const beforeWorkStart = Math.max(half.start, TIME_GRID_START_MIN);
+      const beforeWorkEnd = Math.min(half.end, WORK_START_MIN);
+      if(beforeWorkEnd > beforeWorkStart) offHoursBands.push([beforeWorkStart, beforeWorkEnd]);
+      const afterWorkStart = Math.max(half.start, WORK_END_MIN);
+      const afterWorkEnd = Math.min(half.end, TIME_GRID_END_MIN);
+      if(afterWorkEnd > afterWorkStart) offHoursBands.push([afterWorkStart, afterWorkEnd]);
+      const offHoursHtml = offHoursBands.map(([s, e]) =>
+        `<div class="time-grid-v-offhours" style="top:${((s-half.start)/totalMin)*colHeight}px;height:${((e-s)/totalMin)*colHeight}px;"></div>`
+      ).join('');
       const eventsHtml = halfBlocks.map(b => {
         const topPx = ((b.startMin - half.start) / totalMin) * colHeight;
         let heightPx = ((b.endMin - b.startMin) / totalMin) * colHeight;
@@ -2792,7 +2807,7 @@
           <div class="time-grid-h-half-label">${half.label}</div>
           <div style="display:flex;gap:8px;">
             <div class="time-grid-v-hours" style="height:${colHeight}px;">${hourLabelsHtml}</div>
-            <div class="time-grid-v-track" style="height:${colHeight}px;cursor:pointer;" title="빈 곳을 클릭하면 그 시각으로 할일이 바로 만들어져요" onclick="App.handleTimeGridTrackClick(event, '${jd}', ${half.start}, ${totalMin}, ${colHeight})">${lunchHtml}${nowLineHtml}${eventsHtml}</div>
+            <div class="time-grid-v-track" style="height:${colHeight}px;cursor:pointer;" title="빈 곳을 클릭하면 그 시각으로 할일이 바로 만들어져요" onclick="App.handleTimeGridTrackClick(event, '${jd}', ${half.start}, ${totalMin}, ${colHeight})">${offHoursHtml}${lunchHtml}${nowLineHtml}${eventsHtml}</div>
           </div>
         </div>
       `;
@@ -2838,17 +2853,26 @@
       </label>
     `;
   }
+  // 메모 팝업에서 편집 중인 대상을 찾음 — 아직 저장 안 한 초안(draft)이면 그걸, 아니면 실제 journalTasks에서 찾음.
+  // 시간표 빈 곳 클릭으로 만든 할일은 "저장" 누르기 전까진 이 draft 상태로만 존재하고 목록/시간표에 안 나타남
+  function findJournalTaskForEdit(id){
+    if(floatingDetail && floatingDetail.type === 'memo' && floatingDetail.draft && floatingDetail.draft.id === id) return floatingDetail.draft;
+    return journalTasks.find(t => t.id === id);
+  }
   function addJournalTaskAtTime(dateStr, timeStr){
     const id = 'jt_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
     const startMin = timeToMinutes(timeStr) || 0;
     const endMin = startMin + 30;
     const endTime = `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`;
-    journalTasks.push({
+    const draft = {
       id, text:'', category:'todo', taskType:'todo', recurrence:null, done:false, doneDates:{},
       createdDate: dateStr, time: timeStr, endTime, notes:'', dueDate:'', completedDate:null
-    });
-    // 빈 채로 바로 저장하지 않음 — 메모 팝업에서 실제로 채우고 "저장" 눌러야 커밋됨 (안 채우고 닫으면 그냥 사라짐)
-    openTaskMemo(id, true); // 구글캘린더처럼 시간표의 빈 곳 클릭하면 그 시각으로 바로 입력창이 뜨게
+    };
+    // journalTasks에 바로 안 넣음 — "저장" 누르기 전까진 초안 상태로만 존재해서 목록/시간표에 미리 안 나타남
+    floatingDetail = { type:'memo', taskId: id, draft };
+    journalMemoDirty = false;
+    journalMemoIsNew = true;
+    render();
   }
   // 시간표 블록 드래그로 이동/길이조절 — 매 픽셀마다 다시 그리면 느리고 깜빡이니, 드래그 중엔 그 블록의
   // style만 직접 옮기고, 손을 뗐을 때(mouseup) 딱 한 번만 실제 데이터에 반영 + 다시 그림
@@ -2934,15 +2958,17 @@
   }
   function addJournalTask(category){
     const id = 'jt_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
-    journalTasks.push({
+    const draft = {
       id, text:'', category, taskType:'todo', recurrence:null, done:false, doneDates:{},
       createdDate: journalDate, time:'', notes:'', dueDate:'', completedDate:null
-    });
-    // 빈 채로 바로 저장하지 않음 — 메모 팝업에서 실제로 채우고 "저장" 눌러야 커밋됨 (안 채우고 닫으면 그냥 사라짐)
-    openTaskMemo(id, true); // 항목 추가하자마자 바로 상세 입력창이 뜨게 해서, 목록에서 빈 줄 클릭하는 한 단계를 줄임
+    };
+    floatingDetail = { type:'memo', taskId: id, draft };
+    journalMemoDirty = false;
+    journalMemoIsNew = true;
+    render(); // 항목 추가하자마자 바로 상세 입력창이 뜨게 해서, 목록에서 빈 줄 클릭하는 한 단계를 줄임
   }
   function setJournalTaskKind(id, kind){
-    const task = journalTasks.find(t => t.id === id);
+    const task = findJournalTaskForEdit(id);
     if(!task) return;
     if(kind === 'issue'){
       task.category = 'issue';
@@ -2954,33 +2980,38 @@
     render();
   }
   function updateJournalTaskText(id, value){
-    const task = journalTasks.find(t => t.id === id);
+    const task = findJournalTaskForEdit(id);
     if(!task) return;
     task.text = value;
     journalMemoDirty = true;
     // 타이핑할 때마다 저장하지 않고, 메모 팝업의 "저장" 버튼을 눌러야 커밋되게 함
   }
   function updateJournalTaskTime(id, value){
-    const task = journalTasks.find(t => t.id === id);
+    const task = findJournalTaskForEdit(id);
     if(!task) return;
     task.time = value;
     journalMemoDirty = true;
     render();
   }
   function updateJournalTaskEndTime(id, value){
-    const task = journalTasks.find(t => t.id === id);
+    const task = findJournalTaskForEdit(id);
     if(!task) return;
     task.endTime = value;
     journalMemoDirty = true;
     render();
   }
   function updateJournalTaskNotes(id, value){
-    const task = journalTasks.find(t => t.id === id);
+    const task = findJournalTaskForEdit(id);
     if(!task) return;
     task.notes = value;
     journalMemoDirty = true;
   }
   function saveJournalMemoNow(){
+    // 초안(아직 journalTasks에 없는 상태)이면 지금이 처음 저장하는 순간이니 이제야 실제로 목록에 추가함
+    if(floatingDetail && floatingDetail.type === 'memo' && floatingDetail.draft){
+      journalTasks.push(floatingDetail.draft);
+      floatingDetail = { type:'memo', taskId: floatingDetail.taskId }; // 초안 꼬리표 떼고 진짜 항목으로 전환
+    }
     persistJournalTasks();
     journalMemoDirty = false;
     journalMemoIsNew = false;
@@ -2988,14 +3019,14 @@
     render();
   }
   function updateJournalTaskDueDate(id, value){
-    const task = journalTasks.find(t => t.id === id);
+    const task = findJournalTaskForEdit(id);
     if(!task) return;
     task.dueDate = value;
     journalMemoDirty = true;
     render();
   }
   function updateJournalTaskCreatedDate(id, value){
-    const task = journalTasks.find(t => t.id === id);
+    const task = findJournalTaskForEdit(id);
     if(!task || !value) return;
     task.createdDate = value;
     journalMemoDirty = true;
@@ -3078,7 +3109,7 @@
     showToast(`"${item.title || item.content}" ${value === 'selected' ? '선정' : '미선정'}으로 표시했어요`);
   }
   function setJournalTaskRecurrence(id, value){
-    const task = journalTasks.find(t => t.id === id);
+    const task = findJournalTaskForEdit(id);
     if(!task) return;
     const d = new Date(journalDate + 'T00:00:00');
     if(value === 'none') task.recurrence = null;
@@ -3090,7 +3121,7 @@
     render();
   }
   function toggleJournalTaskRecurCustomDay(id, dow){
-    const task = journalTasks.find(t => t.id === id);
+    const task = findJournalTaskForEdit(id);
     if(!task || !task.recurrence || task.recurrence.type !== 'custom') return;
     if(!Array.isArray(task.recurrence.days)) task.recurrence.days = [];
     const idx = task.recurrence.days.indexOf(dow);
@@ -3100,7 +3131,7 @@
     render();
   }
   function updateJournalTaskRecurUntil(id, value){
-    const task = journalTasks.find(t => t.id === id);
+    const task = findJournalTaskForEdit(id);
     if(!task || !task.recurrence) return;
     task.recurrence.until = value || null;
     journalMemoDirty = true;
@@ -5897,7 +5928,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         floatingDetail = null;
       }
     }else if(floatingDetail && floatingDetail.type === 'memo'){
-      const memoTask = journalTasks.find(t => t.id === floatingDetail.taskId);
+      const memoTask = floatingDetail.draft || journalTasks.find(t => t.id === floatingDetail.taskId);
       if(memoTask){
         const memoLinkedItem = memoTask.linkedItemId ? items.find(i => i.id === memoTask.linkedItemId) : null;
         const memoDdayInfo = memoLinkedItem ? journalLinkedDdayInfo(memoLinkedItem, memoTask.linkedType) : null;
@@ -5918,7 +5949,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                 <label>날짜</label>
                 <input type="date" value="${escapeHtml(memoTask.createdDate||journalDate)}" onchange="App.updateJournalTaskCreatedDate('${memoTask.id}', this.value)" />
               </div>
-              ${!memoTask.recurrence ? `
+              ${(!memoTask.recurrence && !journalMemoIsNew) ? `
                 <label class="journal-memo-done-row">
                   <input type="checkbox" ${memoTask.done?'checked':''} onchange="App.toggleJournalTaskDone('${memoTask.id}', '${journalDate}')" />
                   완료 처리
@@ -6234,6 +6265,20 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
   restoreViewState();
   loadItems();
   setInterval(() => { render(); }, 60000); // refresh once per minute so D-DAY countdowns stay current; set once here, never re-created
+
+  // ESC로 열려있는 팝업/모달 닫기 — 여러 개 겹쳐있을 수 있으니 제일 위에 뜬 것부터 순서대로 확인
+  document.addEventListener('keydown', function(e){
+    if(e.key !== 'Escape') return;
+    if(confirmModal){ chooseConfirm('cancel'); return; }
+    if(floatingDetail){ closeFloatingDetail(); return; }
+    if(modalState){ closeModal(); return; }
+    if(backupOpen){ backupOpen = false; render(); return; }
+    if(channelRenameOpen){ channelRenameOpen = null; render(); return; }
+    if(channelManageOpen){ channelManageOpen = false; render(); return; }
+    if(storageSettingsOpen){ storageSettingsOpen = false; render(); return; }
+    if(globalSearchOpen){ globalSearchOpen = false; render(); return; }
+    if(monthlyReportOpen){ monthlyReportOpen = false; render(); return; }
+  });
 
   // 타이핑 멈추고 0.6초 뒤 저장되는 디바운스 방식이라, 그 틈에 바로 탭을 닫으면 마지막 몇 글자가 유실될 수 있음 —
   // 저장 대기 중인 디바운스 타이머가 남아있으면 닫기 전에 브라우저가 한 번 물어보게 함
