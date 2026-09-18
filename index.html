@@ -133,6 +133,7 @@
   .stat-num{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--ink);line-height:1.1;white-space:nowrap;}
   .stat-label{font-size:11px;color:var(--ink-soft);margin-top:3px;white-space:nowrap;}
   .stat-card-alert{border-color:var(--urgent);}
+  .stat-card-holiday{background:#FDF2DC;border-color:#E8CE9A;}
   .stat-card-alert .stat-num{color:var(--urgent);}
   .stat-card-clickable{cursor:pointer;}
   .stat-card-clickable:hover{border-color:#8A5A12;}
@@ -300,6 +301,10 @@
   .journal-date{font-family:var(--serif);font-size:17px;font-weight:700;color:var(--ink);min-width:200px;text-align:center;}
   .journal-today-badge{font-size:11px;font-weight:700;color:var(--brand);background:var(--brand-soft);padding:2px 8px;border-radius:999px;margin-left:6px;}
   .journal-today-btn{padding:6px 12px;font-size:12px;}
+  .journal-holiday-select{margin-left:auto;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px;background:var(--surface);cursor:pointer;font-family:var(--sans);}
+  .journal-holiday-banner{background:#FDF2DC;color:#96650F;border:1px solid #E8CE9A;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;margin:10px 0 14px;}
+  .journal-summary-strip{display:flex;gap:14px;flex-wrap:wrap;padding:10px 4px 14px;font-size:13px;font-weight:700;color:var(--ink-soft);}
+  .journal-summary-item.is-hot{color:var(--urgent);}
   .journal-today-btn.is-current{opacity:0.45;cursor:default;pointer-events:none;}
   .journal-import-hint{
     font-size:12.5px;color:var(--warn);background:var(--warn-soft);border:1px dashed var(--warn);
@@ -433,7 +438,21 @@
   .journal-did-row input{flex:1;min-width:0;border:none;background:transparent;font-family:var(--sans);font-size:13.5px;color:var(--ink);padding:4px 0;}
   .journal-did-row input:focus{outline:none;border-bottom:1px solid var(--brand);}
   .time-grid-v-wrap{display:grid;grid-template-columns:1fr 1fr;gap:14px;border:1px solid var(--line);border-radius:12px;padding:10px 12px 12px;background:linear-gradient(180deg,#FAFAF7,#FFFFFF);}
+  .time-grid-v-wrap.is-holiday{opacity:0.5;filter:grayscale(0.3);}
   @media (max-width:480px){ .time-grid-v-wrap{grid-template-columns:1fr;} }
+  .time-grid-week-wrap{display:flex;gap:6px;border:1px solid var(--line);border-radius:12px;padding:10px 10px 12px;background:linear-gradient(180deg,#FAFAF7,#FFFFFF);overflow-x:auto;}
+  .time-grid-week-hours{width:38px;flex-shrink:0;position:relative;}
+  .time-grid-week-cols{display:flex;gap:4px;flex:1;min-width:560px;}
+  .time-grid-week-col{flex:1;min-width:0;position:relative;}
+  .time-grid-week-col.is-today .time-grid-week-day-label{color:var(--brand);font-weight:800;}
+  .time-grid-week-day-label{text-align:center;font-size:11px;font-weight:700;color:var(--ink-soft);cursor:pointer;padding-bottom:4px;height:22px;}
+  .time-grid-week-day-num{display:block;font-size:13px;}
+  .time-grid-week-block{position:absolute;border-radius:4px;overflow:hidden;cursor:pointer;font-size:9.5px;padding:2px 4px;border-left:2px solid transparent;box-shadow:0 1px 3px -1px rgba(35,46,41,0.2);line-height:1.25;box-sizing:border-box;}
+  .time-grid-week-block-title{font-weight:700;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+  .time-grid-week-block-time{opacity:0.75;font-size:8.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .time-grid-week-day-label.is-saturday{color:#3B6BC9;}
+  .time-grid-week-day-label.is-sunday{color:#C64A4A;}
+  .time-grid-week-block.is-done{opacity:0.45;}
   .time-grid-h-half-label{font-size:11px;font-weight:700;color:var(--ink-faint);margin-bottom:6px;}
   .time-grid-v-hours{width:42px;flex-shrink:0;position:relative;}
   .time-grid-v-hour-row{border-top:1px dashed var(--line);position:relative;}
@@ -449,7 +468,7 @@
     position:absolute;border-radius:7px;padding:5px 8px;overflow:hidden;cursor:pointer;
     font-size:10.5px;line-height:1.25;box-sizing:border-box;border-left:3px solid transparent;
     box-shadow:0 2px 5px -2px rgba(35,46,41,0.16);transition:transform .12s ease, box-shadow .12s ease;
-    display:flex;align-items:flex-start;
+    display:flex;flex-direction:column;justify-content:center;gap:2px;
   }
   .time-grid-v-block:hover{transform:translateY(-1px);box-shadow:0 5px 12px -3px rgba(35,46,41,0.26);z-index:3;}
   .time-grid-v-block.is-draggable{cursor:grab;}
@@ -461,6 +480,7 @@
   .time-grid-v-block.is-done .time-grid-v-block-label{text-decoration:line-through;}
   .time-grid-v-block-check{flex-shrink:0;color:var(--brand);font-weight:800;}
   .time-grid-v-block-line{display:flex;align-items:center;gap:5px;width:100%;overflow:hidden;white-space:nowrap;}
+  .time-grid-v-block-timeline{display:flex;align-items:center;gap:5px;width:100%;overflow:hidden;white-space:nowrap;font-size:9.5px;opacity:0.75;font-weight:600;}
   .time-grid-v-block-icon{flex-shrink:0;}
   .time-grid-v-block-label{font-weight:700;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}
   .time-grid-h-block-channel{font-weight:600;opacity:0.7;flex-shrink:0;}
@@ -1614,7 +1634,9 @@
   }
 
   function goHome(){
-    mainTab = 'dashboard';
+    mainTab = 'journal';
+    journalDate = todayISO();
+    journalViewMode = 'day';
     activeFilter = '전체';
     searchQuery = '';
     recheckOnly = false;
@@ -1636,7 +1658,7 @@
     if(recheckOnly) viewMode = 'day';
     render();
   }
-  let mainTab = 'dashboard';
+  let mainTab = 'journal';
   function setMainTab(tab){
     mainTab = tab;
     floatingDetail = null; // 플로팅 패널은 특정 항목에 종속된 거라, 다른 탭으로 넘어가면 닫혀야 함
@@ -1672,6 +1694,14 @@
   let journalWeekAnchor = calcWeekStart(new Date());
   let journalSearchQuery = '';
   let journalDoneExpanded = new Set(); // `${jd}|${category}` 형태로 저장
+  let journalUnifiedTab = 'todo'; // 업무기록/팔로우업을 탭으로 전환해서 보여줌(둘 다 항상 스크롤에 늘어놓지 않고)
+  let journalGroupExpanded = new Set(); // `${jd}|${category}|recurring` 또는 `...|normal` — 급한 것 말고는 기본 접힘
+  function toggleJournalUnifiedTab(tab){ journalUnifiedTab = tab; render(); }
+  function toggleJournalGroupExpanded(key){
+    if(journalGroupExpanded.has(key)) journalGroupExpanded.delete(key);
+    else journalGroupExpanded.add(key);
+    render();
+  }
   let ganttEndedChannelsExpanded = false;
   function toggleGanttEndedChannels(){
     ganttEndedChannelsExpanded = !ganttEndedChannelsExpanded;
@@ -2404,6 +2434,13 @@
     if(!journalEntries[date].autoLogged) journalEntries[date].autoLogged = []; // 예전 데이터 하위호환
     return journalEntries[date];
   }
+  // 연차/공휴일 표시 — journalEntries에 날짜별로 같이 저장(새 저장소 안 만들고 기존 구조에 얹음)
+  function setJournalHoliday(jd, type){
+    const entry = getJournalEntry(jd);
+    entry.holiday = type ? { type, label: type === 'annual' ? '연차' : '공휴일' } : null;
+    persistJournal();
+    render();
+  }
   function journalShiftDay(delta){
     const d = new Date(journalDate + 'T00:00:00');
     d.setDate(d.getDate() + delta);
@@ -2681,7 +2718,10 @@
     }
     return sorted;
   }
-  function renderTimeGrid(jd){
+  const DEADLINE_LEAD_MIN = 120; // 마감 몇 분 전부터 일정에 미리 꽂아둘지 (지금은 2시간)
+  const LATE_DEADLINE_CUTOFF_MIN = 20 * 60; // 이 시각 이후 마감은 시간표에 굳이 안 꽂음(업무기록 목록에만 표시) — 밤 시간대에 조각처럼 떠봤자 실효성이 없음
+  // 하루치 시간표 블록 계산 — 일간 시간표(오전/오후 분할)랑 주간 시간표(요일별 컬럼) 둘 다 이 함수를 같이 씀
+  function buildDayBlocks(jd){
     const rawTasks = journalTasks.filter(t => {
       if(t.category !== 'todo' && t.category !== 'issue') return false;
       if(!taskAppliesToDate(t, jd) || !isLinkedTaskStillRelevant(t)) return false;
@@ -2690,8 +2730,6 @@
       return true;
     });
     const blocks = [];
-    const DEADLINE_LEAD_MIN = 120; // 마감 몇 분 전부터 일정에 미리 꽂아둘지 (지금은 2시간)
-    const LATE_DEADLINE_CUTOFF_MIN = 20 * 60; // 이 시각 이후 마감은 시간표에 굳이 안 꽂음(업무기록 목록에만 표시) — 밤 시간대에 조각처럼 떠봤자 실효성이 없음
     rawTasks.forEach(t => {
       let startMin = timeToMinutes(t.time);
       let isDeadlineMarker = false;
@@ -2720,7 +2758,10 @@
       blocks.push({ task: t, startMin: clippedStart, endMin: Math.max(clippedEnd, clippedStart+12), realEndMin: endMin, label, isLinked: !!linkedItem, isDeadlineMarker, extendsPastView, isDone, channel: linkedItem ? linkedItem.channel : null, kind: t.category==='issue' ? 'issue' : (t.taskType||'todo') });
     });
     // 일정이 없어도 시간표 축은 항상 고정으로 떠 있게 함 (있다없다 왔다갔다 하지 않게)
-    const packed = blocks.length ? packTimeGridLanes(blocks) : [];
+    return blocks.length ? packTimeGridLanes(blocks) : [];
+  }
+  function renderTimeGrid(jd){
+    const packed = buildDayBlocks(jd);
     // 세로형 + 오전/오후 2열 — 세로 길이는 하루 전체를 한 줄로 그리는 것보다 절반으로 줄이면서,
     // (가로형과 달리) 블록 폭은 항상 "열 전체 너비"라 제목이 시간 위치 때문에 좁아지는 일이 없음.
     // 14시를 기준으로 고정 분할하고(점심시간과 무관), 시간 눈금은 1시간 단위로 촘촘하게 보여줌
@@ -2772,7 +2813,7 @@
       const eventsHtml = halfBlocks.map(b => {
         const topPx = ((b.startMin - half.start) / totalMin) * colHeight;
         let heightPx = ((b.endMin - b.startMin) / totalMin) * colHeight;
-        heightPx = Math.max(heightPx, 20); // 너무 짧은 블록도 최소 높이는 보장
+        heightPx = Math.max(heightPx, 32); // 2줄(제목+시간)이 들어가야 하니 최소 높이를 좀 더 넉넉하게
         const widthPct = 100 / b._laneCount;
         const leftPct = b._lane * widthPct;
         const kindClass = b.isDeadlineMarker ? 'time-grid-block-linked' : (b.isLinked ? 'time-grid-block-linked' : `time-grid-block-${b.kind}`);
@@ -2798,7 +2839,8 @@
         // 드래그로 옮기는 게 의미가 없음 — 직접 만든 할일/미팅만 드래그로 옮기고 늘릴 수 있게 함
         const draggable = !b.isLinked && !b.isDeadlineMarker;
         return `<div class="time-grid-v-block ${kindClass} ${b.isDeadlineMarker?'is-deadline-marker':''} ${b.isDone?'is-done':''} ${draggable?'is-draggable':''}" data-half-start="${half.start}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${heightPx-3}px;left:${leftPct}%;width:calc(${widthPct}% - 4px);" ${draggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
-          <div class="time-grid-v-block-line">${b.isDone ? '<span class="time-grid-v-block-check">✓</span>' : `<span class="time-grid-v-block-icon">${icon}</span>`}${b.channel ? `<span class="time-grid-h-block-channel">[${escapeHtml(b.channel)}]</span>` : ''}<span class="time-grid-v-block-label">${escapeHtml(b.label)}</span>${starHtml}${startsHtml}${extendsHtml}</div>
+          <div class="time-grid-v-block-line">${b.isDone ? '<span class="time-grid-v-block-check">✓</span>' : `<span class="time-grid-v-block-icon">${icon}</span>`}${b.channel ? `<span class="time-grid-h-block-channel">[${escapeHtml(b.channel)}]</span>` : ''}<span class="time-grid-v-block-label">${escapeHtml(b.label)}</span>${starHtml}</div>
+          <div class="time-grid-v-block-timeline">${startsHtml}<span>${escapeHtml(timeLabel)}${deadlineSuffix}</span>${extendsHtml}</div>
           ${draggable ? `<div class="time-grid-v-block-resize" onmousedown="App.startBlockDrag(event, '${b.task.id}', 'resize')" title="드래그해서 길이 조절"></div>` : ''}
         </div>`;
       }).join('');
@@ -2812,13 +2854,73 @@
         </div>
       `;
     }
+    const isHolidayDay = !!getJournalEntry(jd).holiday;
     return `
       <div class="journal-section">
         <div class="journal-section-label">🕐 오늘 시간표 ${infoTip('할일에 시작~종료 시각을 넣으면 여기에 길이대로 표시돼요. 겹치는 시간대는 옆으로 나란히 배치되고, 오전/오후 두 열로 나눠서 보여줘요.', 220)}</div>
-        <div class="time-grid-v-wrap">
+        <div class="time-grid-v-wrap ${isHolidayDay ? 'is-holiday' : ''}">
           ${renderHalf(halves[0])}
           ${renderHalf(halves[1])}
         </div>
+      </div>
+    `;
+  }
+  function renderWeekTimeGrid(weekAnchor){
+    const HOUR_PX_W = 26; // 7칸이라 일간보다 살짝 촘촘하게
+    const totalMin = TIME_GRID_END_MIN - TIME_GRID_START_MIN;
+    const colHeight = (totalMin / 60) * HOUR_PX_W;
+    const dowNames = ['일','월','화','수','목','금','토'];
+    const startHour = TIME_GRID_START_MIN / 60, endHour = TIME_GRID_END_MIN / 60;
+    const hourRows = [];
+    for(let h = startHour; h < endHour; h++) hourRows.push(h);
+    const hourLabelsHtml = hourRows.map(h => `<div class="time-grid-v-hour-row" style="height:${HOUR_PX_W}px;"><span class="time-grid-v-hour-label">${String(h).padStart(2,'0')}:00</span></div>`).join('')
+      + `<span class="time-grid-v-hour-label" style="position:absolute;top:${colHeight}px;">${String(endHour).padStart(2,'0')}:00</span>`;
+    const lunchStart = LUNCH_START_MIN, lunchEnd = LUNCH_END_MIN;
+    const lunchHtml = (lunchEnd > lunchStart && lunchStart < TIME_GRID_END_MIN && lunchEnd > TIME_GRID_START_MIN)
+      ? `<div class="time-grid-v-lunch" style="top:${((lunchStart-TIME_GRID_START_MIN)/totalMin)*colHeight}px;height:${((lunchEnd-lunchStart)/totalMin)*colHeight}px;"><span class="time-grid-v-lunch-label">🍚 점심</span></div>` : '';
+    const offHoursBands = [];
+    if(WORK_START_MIN > TIME_GRID_START_MIN) offHoursBands.push([TIME_GRID_START_MIN, Math.min(WORK_START_MIN, TIME_GRID_END_MIN)]);
+    if(WORK_END_MIN < TIME_GRID_END_MIN) offHoursBands.push([Math.max(WORK_END_MIN, TIME_GRID_START_MIN), TIME_GRID_END_MIN]);
+    const offHoursHtml = offHoursBands.map(([s,e]) => `<div class="time-grid-v-offhours" style="top:${((s-TIME_GRID_START_MIN)/totalMin)*colHeight}px;height:${((e-s)/totalMin)*colHeight}px;"></div>`).join('');
+    const todayStr = todayISO();
+    const nowMinNow = new Date().getHours()*60 + new Date().getMinutes();
+    const dayColsHtml = [];
+    for(let i = 0; i < 7; i++){
+      const d = new Date(weekAnchor.getFullYear(), weekAnchor.getMonth(), weekAnchor.getDate()+i);
+      const dateStr = toISO(d);
+      const isToday = dateStr === todayStr;
+      const packed = buildDayBlocks(dateStr);
+      const nowLineHtml = isToday && nowMinNow >= TIME_GRID_START_MIN && nowMinNow <= TIME_GRID_END_MIN
+        ? `<div class="time-grid-v-now" style="top:${((nowMinNow-TIME_GRID_START_MIN)/totalMin)*colHeight}px;"><span class="time-grid-now-dot"></span></div>` : '';
+      const eventsHtml = packed.map(b => {
+        const topPx = ((b.startMin - TIME_GRID_START_MIN) / totalMin) * colHeight;
+        const heightPx = Math.max(((b.endMin - b.startMin) / totalMin) * colHeight, 32);
+        const widthPct = 100 / b._laneCount;
+        const leftPct = b._lane * widthPct;
+        const kindClass = b.isDeadlineMarker ? 'time-grid-block-linked' : (b.isLinked ? 'time-grid-block-linked' : `time-grid-block-${b.kind}`);
+        const icon = b.isDeadlineMarker ? '⏰' : (b.isLinked ? '🎯' : ({todo:'📌',issue:'👀',meeting:'🗣️',proposal:'💡',call:'📞',review:'📋'}[b.kind] || '📌'));
+        const minutesToLabelW = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+        const timeLabel = b.isDeadlineMarker
+          ? `${minutesToLabelW(b.startMin)}~${minutesToLabelW(b.realEndMin != null ? b.realEndMin : b.endMin)}`
+          : `${normalizeTime(b.task.time)}${b.task.endTime ? '~'+normalizeTime(b.task.endTime) : ''}`;
+        const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(b.label)} (${timeLabel})`;
+        return `<div class="time-grid-week-block ${kindClass} ${b.isDone?'is-done':''}" style="top:${topPx}px;height:${heightPx-2}px;left:${leftPct}%;width:calc(${widthPct}% - 2px);" onclick="${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
+          <div class="time-grid-week-block-title">${icon} ${escapeHtml(b.label)}</div>
+          <div class="time-grid-week-block-time">${escapeHtml(timeLabel)}</div>
+        </div>`;
+      }).join('');
+      const dowLabelClass = d.getDay() === 0 ? 'is-sunday' : d.getDay() === 6 ? 'is-saturday' : '';
+      dayColsHtml.push(`
+        <div class="time-grid-week-col ${isToday?'is-today':''}">
+          <div class="time-grid-week-day-label ${dowLabelClass}" onclick="App.journalGoToDate('${dateStr}')" title="이 날 일별로 보기">${dowNames[d.getDay()]}<span class="time-grid-week-day-num">${d.getDate()}</span></div>
+          <div class="time-grid-v-track" style="height:${colHeight}px;" onclick="App.handleTimeGridTrackClick(event, '${dateStr}', ${TIME_GRID_START_MIN}, ${totalMin}, ${colHeight})">${offHoursHtml}${lunchHtml}${nowLineHtml}${eventsHtml}</div>
+        </div>
+      `);
+    }
+    return `
+      <div class="time-grid-week-wrap">
+        <div class="time-grid-week-hours" style="height:${colHeight}px;margin-top:26px;">${hourLabelsHtml}</div>
+        <div class="time-grid-week-cols">${dayColsHtml.join('')}</div>
       </div>
     `;
   }
@@ -4289,7 +4391,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     html += `
       <div class="topbar">
         <div>
-          <h1 class="brand-title"><span class="brand-title-link" onclick="App.goHome()" title="현황판으로 이동">PromoDesk</span> <span class="legend-info-wrap" style="vertical-align:middle;">
+          <h1 class="brand-title"><span class="brand-title-link" onclick="App.goHome()" title="업무일지로 이동">PromoDesk</span> <span class="legend-info-wrap" style="vertical-align:middle;">
             <span class="legend-info-icon" tabindex="0" style="width:22px;height:22px;font-size:12px;">?</span>
             <div class="legend-tooltip" style="white-space:normal;width:280px;right:auto;left:0;top:calc(100% + 10px);">
               <div class="legend-tooltip-caption">📋 현황판</div>
@@ -4326,8 +4428,10 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       </div>
     `;
 
+    const todayHoliday = getJournalEntry(todayISO()).holiday;
     html += `
       <div class="stats-row">
+        ${todayHoliday ? `<div class="stat-card stat-card-clickable stat-card-holiday" onclick="App.journalGoToday();App.setMainTab('journal');"><div class="stat-num">${todayHoliday.type==='annual'?'🏖️':'🎌'}</div><div class="stat-label">오늘 ${escapeHtml(todayHoliday.label)}</div></div>` : ''}
         <div class="stat-card stat-card-clickable" onclick="App.jumpToThisWeek()"><div class="stat-num">${thisWeekCount}</div><div class="stat-label">이번주 마감</div></div>
         <div class="stat-card stat-card-clickable" onclick="App.jumpToThisMonth()"><div class="stat-num">${thisMonthCount}</div><div class="stat-label">이번달 마감</div></div>
         <div class="stat-card stat-card-clickable ${overdueCount>0?'stat-card-alert':''}" onclick="App.jumpToOverdue()"><div class="stat-num">${overdueCount}</div><div class="stat-label">지난 마감 미완료</div></div>
@@ -5148,24 +5252,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
           <button class="icon-btn" onclick="App.journalWeekNext()">›</button>
           ${journalDatePickerOpen ? renderMiniDatePicker() : ''}
         </div>`;
-        const dowNames2 = ['일','월','화','수','목','금','토'];
-        html += `<div class="week-list">`;
-        for(let i=0; i<7; i++){
-          const d = new Date(journalWeekAnchor.getFullYear(), journalWeekAnchor.getMonth(), journalWeekAnchor.getDate()+i);
-          const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-          const dayTodos = tasksForDate(dateStr, 'todo');
-          const dayIssues = tasksForDate(dateStr, 'issue');
-          const isToday = dateStr === todayISO();
-          const hasContent = dayTodos.length || dayIssues.length;
-          html += `<div class="week-day journal-week-day ${isToday?'is-today':''}">
-            <div class="week-day-label" onclick="App.journalGoToDate('${dateStr}')" style="cursor:pointer;">${dowNames2[d.getDay()]} <span class="week-day-num">${d.getMonth()+1}.${d.getDate()}</span>${isToday?' · 오늘':''}</div>
-            ${hasContent ? `
-              ${dayTodos.map(t => journalTaskRowCompactHtml(t, dateStr)).join('')}
-              ${dayIssues.map(t => journalTaskRowCompactHtml(t, dateStr)).join('')}
-            ` : `<div class="week-day-empty">기록 없음</div>`}
-          </div>`;
-        }
-        html += `</div>`;
+        html += renderWeekTimeGrid(journalWeekAnchor);
 
       }else{
       const jd = journalDate;
@@ -5173,13 +5260,33 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       const dObj = new Date(jd + 'T00:00:00');
       const dowNames = ['일','월','화','수','목','금','토'];
       const dateLabel = `${dObj.getFullYear()}. ${String(dObj.getMonth()+1).padStart(2,'0')}. ${String(dObj.getDate()).padStart(2,'0')} (${dowNames[dObj.getDay()]})`;
+      const holidayInfo = getJournalEntry(jd).holiday;
 
       html += `<div class="journal-nav" style="position:relative;">
         <button class="icon-btn" onclick="App.journalShiftDay(-1)">‹</button>
         <div class="journal-date" style="cursor:pointer;" onclick="App.toggleJournalDatePicker()" title="날짜로 바로 이동">${dateLabel}</div>
         <button class="icon-btn" onclick="App.journalShiftDay(1)">›</button>
         <button class="btn btn-ghost journal-today-btn ${isToday?'is-current':''}" onclick="${isToday ? '' : "App.journalGoToday()"}">오늘</button>
+        <select class="journal-holiday-select" onchange="App.setJournalHoliday('${jd}', this.value)" title="연차/공휴일 표시">
+          <option value="" ${!holidayInfo?'selected':''}>평일</option>
+          <option value="annual" ${holidayInfo&&holidayInfo.type==='annual'?'selected':''}>🏖️ 연차</option>
+          <option value="public" ${holidayInfo&&holidayInfo.type==='public'?'selected':''}>🎌 공휴일</option>
+        </select>
         ${journalDatePickerOpen ? renderMiniDatePicker() : ''}
+      </div>`;
+      if(holidayInfo){
+        html += `<div class="journal-holiday-banner">${holidayInfo.type==='annual'?'🏖️':'🎌'} 이 날은 ${escapeHtml(holidayInfo.label)}로 표시돼 있어요</div>`;
+      }
+
+      // 오늘 요약 — 스크롤 안 해도 오늘 급한 것/미팅/완료 현황이 한눈에 보이게
+      const summaryUrgentCount = tasksForDate(jd, 'todo').filter(isTaskUrgentToday).length + tasksForDate(jd, 'issue').filter(isTaskUrgentToday).length;
+      const summaryMeetingCount = tasksForDate(jd, 'todo').filter(t => t.taskType === 'meeting').length;
+      const summaryDoneCount = doneTasksForDate(jd, 'todo').length + doneTasksForDate(jd, 'issue').length;
+      const summaryTotalCount = tasksForDate(jd, 'todo').length + tasksForDate(jd, 'issue').length + summaryDoneCount;
+      html += `<div class="journal-summary-strip">
+        <span class="journal-summary-item ${summaryUrgentCount?'is-hot':''}">🔴 급한 일 ${summaryUrgentCount}건</span>
+        <span class="journal-summary-item">🗣️ 미팅 ${summaryMeetingCount}건</span>
+        <span class="journal-summary-item">✅ 완료 ${summaryDoneCount}/${summaryTotalCount}건</span>
       </div>`;
 
       // 오늘 챙길 프로모션 가져오기 (강제 자동 아님 - 버튼 눌러야 반영, '할 일'에 실제 항목 연결된 태스크로 추가됨)
@@ -5210,6 +5317,10 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         const doneTasks = doneTasksForDate(jd, category);
         const doneKey = `${jd}|${category}`;
         const doneExpanded = journalDoneExpanded.has(doneKey);
+        const recurringKey = `${jd}|${category}|recurring`;
+        const normalKey = `${jd}|${category}|normal`;
+        const recurringExpanded = journalGroupExpanded.has(recurringKey);
+        const normalExpanded = journalGroupExpanded.has(normalKey);
         html += `<div class="journal-section">
           <div class="journal-section-label">${label}${tipHtml ? ' '+infoTip(tipHtml, 260) : ''}</div>
           ${urgentTasks.length ? `
@@ -5217,12 +5328,12 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
             <div class="journal-list">${urgentTasks.map(task => journalTaskRowHtml(task, jd, placeholder, taskUrgencyN(task) < 0 ? 'task-row-urgent-overdue' : 'task-row-urgent-today')).join('')}</div>
           ` : ''}
           ${recurringTasks.length ? `
-            <div class="journal-subgroup-label journal-subgroup-recurring">🔁 반복 업무</div>
-            <div class="journal-list">${recurringTasks.map(task => journalTaskRowHtml(task, jd, placeholder, 'task-row-recurring')).join('')}</div>
+            <div class="journal-done-toggle" onclick="App.toggleJournalGroupExpanded('${recurringKey}')">${recurringExpanded?'▾':'▸'} 🔁 반복 업무 ${recurringTasks.length}건</div>
+            ${recurringExpanded ? `<div class="journal-list" style="margin-top:8px;">${recurringTasks.map(task => journalTaskRowHtml(task, jd, placeholder, 'task-row-recurring')).join('')}</div>` : ''}
           ` : ''}
           ${normalTasks.length ? `
-            ${(urgentTasks.length || recurringTasks.length) ? `<div class="journal-subgroup-label">📋 그 외 할일</div>` : ''}
-            <div class="journal-list">${normalTasks.map(task => journalTaskRowHtml(task, jd, placeholder)).join('')}</div>
+            <div class="journal-done-toggle" onclick="App.toggleJournalGroupExpanded('${normalKey}')">${normalExpanded?'▾':'▸'} 📋 그 외 할일 ${normalTasks.length}건</div>
+            ${normalExpanded ? `<div class="journal-list" style="margin-top:8px;">${normalTasks.map(task => journalTaskRowHtml(task, jd, placeholder)).join('')}</div>` : ''}
           ` : ''}
           <button type="button" class="btn btn-ghost journal-add-btn" onclick="App.addJournalTask('${category}')">+ 항목 추가</button>
           ${doneTasks.length ? `
@@ -5259,10 +5370,19 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
           </div>
         </div>`;
       }
-      journalTaskSection('todo', '📌 업무 기록', '내용을 입력하세요',
-        `<b>이렇게 써보세요</b><br>+ 항목 추가 누르면 바로 입력창이 떠요.<br>• 종류(할일/미팅/제안/컨택/검토) 선택 가능<br>• 🔴빨간 배경 = 오늘·지난 마감<br>• 🔁녹색 배경 = 반복 업무(체크 없이 그날의 리마인더로만 표시)<br>• 미팅/컨택은 그 날 하루만 표시되고, 나머지 할일은 완료 전까지 계속 이월돼요<br>• 체크하면 바로 완료 처리돼요`);
-      journalTaskSection('issue', '👀 팔로우업', '예: 카카오톡딜 쿠폰 예산 초과 — 계속 확인 필요',
-        `<b>이렇게 써보세요</b><br>하루 이틀에 안 끝나고 계속 지켜봐야 하는 문제를 적어두는 곳이에요.<br>완전히 해결됐을 때만 체크하시면 돼요.`);
+      const todoCountForTab = tasksForDate(jd, 'todo').length;
+      const issueCountForTab = tasksForDate(jd, 'issue').length;
+      html += `<div class="tabs" style="margin-bottom:0;">
+        <div class="tab ${journalUnifiedTab==='todo'?'active':''}" onclick="App.toggleJournalUnifiedTab('todo')">📌 업무 기록${todoCountForTab?` (${todoCountForTab})`:''}</div>
+        <div class="tab ${journalUnifiedTab==='issue'?'active':''}" onclick="App.toggleJournalUnifiedTab('issue')">👀 팔로우업${issueCountForTab?` (${issueCountForTab})`:''}</div>
+      </div>`;
+      if(journalUnifiedTab === 'todo'){
+        journalTaskSection('todo', '📌 업무 기록', '내용을 입력하세요',
+          `<b>이렇게 써보세요</b><br>+ 항목 추가 누르면 바로 입력창이 떠요.<br>• 종류(할일/미팅/제안/컨택/검토) 선택 가능<br>• 🔴빨간 배경 = 오늘·지난 마감<br>• 🔁녹색 배경 = 반복 업무(체크 없이 그날의 리마인더로만 표시)<br>• 미팅/컨택은 그 날 하루만 표시되고, 나머지 할일은 완료 전까지 계속 이월돼요<br>• 체크하면 바로 완료 처리돼요`);
+      }else{
+        journalTaskSection('issue', '👀 팔로우업', '예: 카카오톡딜 쿠폰 예산 초과 — 계속 확인 필요',
+          `<b>이렇게 써보세요</b><br>하루 이틀에 안 끝나고 계속 지켜봐야 하는 문제를 적어두는 곳이에요.<br>완전히 해결됐을 때만 체크하시면 돼요.`);
+      }
 
       // 짧은 메모장 — 할일/팔로우업처럼 체크해서 끝내는 게 아니라, 그냥 "오늘 있었던 일" 한두 줄 가볍게 남기는 용도
       const dayEntry = getJournalEntry(jd);
@@ -6133,6 +6253,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     setMainTab,
     journalShiftDay,
     journalGoToday,
+    setJournalHoliday,
     setJournalViewMode,
     journalCalPrev,
     journalCalNext,
@@ -6158,6 +6279,8 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     bulkJournalDelete,
     setJournalSearchQuery,
     toggleJournalDoneExpanded,
+    toggleJournalUnifiedTab,
+    toggleJournalGroupExpanded,
     addJournalTask,
     addJournalTaskAtTime,
     handleTimeGridTrackClick,
