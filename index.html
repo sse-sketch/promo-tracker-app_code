@@ -309,19 +309,18 @@
   .journal-holiday-backdrop{position:fixed;inset:0;z-index:499;}
   .journal-holiday-popover{
     position:absolute;top:calc(100% + 8px);right:0;z-index:500;background:#FFFFFF;
-    border:1px solid var(--line);border-radius:12px;padding:12px;width:250px;
+    border:1px solid var(--line);border-radius:12px;padding:12px;width:280px;
     box-shadow:0 12px 28px -10px rgba(35,46,41,0.35);overflow:visible;
   }
   .journal-holiday-popover-title{font-size:11.5px;font-weight:700;color:var(--ink-faint);margin-bottom:8px;}
-  .journal-holiday-pills{display:flex;flex-wrap:wrap;gap:6px;overflow:visible;}
+  .journal-holiday-pills{display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;overflow:visible;}
   .journal-holiday-pill{
-    display:inline-block;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:600;
+    display:block;text-align:center;padding:6px 4px;border-radius:8px;font-size:11px;font-weight:600;
     background:var(--surface-2);color:var(--ink-soft);cursor:pointer;border:1px solid transparent;
-    transition:transform .08s ease;
+    transition:transform .08s ease;white-space:nowrap;
   }
   .journal-holiday-pill:hover{transform:scale(1.04);}
   .journal-holiday-pill.active{background:var(--brand);color:#fff;}
-  .journal-holiday-banner{background:#FDF2DC;color:#96650F;border:1px solid #E8CE9A;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;margin:10px 0 14px;}
   .journal-summary-strip{display:flex;gap:14px;flex-wrap:wrap;padding:10px 4px 14px;font-size:13px;font-weight:700;color:var(--ink-soft);}
   .journal-summary-item.is-hot{color:var(--urgent);}
   .journal-today-btn.is-current{opacity:0.45;cursor:default;pointer-events:none;}
@@ -706,6 +705,15 @@
   .journal-memo-edit-row{display:flex;gap:8px;margin-bottom:10px;}
   .journal-memo-done-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px;color:var(--ink-soft);cursor:pointer;}
   .journal-memo-done-row input[type=checkbox]{width:16px;height:16px;accent-color:var(--brand);cursor:pointer;}
+  .journal-memo-star-btn{
+    display:flex;align-items:center;justify-content:center;gap:6px;width:100%;
+    padding:10px;margin-bottom:10px;border-radius:10px;border:1.5px solid #E0C878;
+    background:#FFFBEF;color:#8A7A3A;font-size:13.5px;font-weight:700;cursor:pointer;
+    font-family:var(--sans);transition:transform .08s ease;
+  }
+  .journal-memo-star-btn:hover{transform:scale(1.01);}
+  .journal-memo-star-btn.is-starred{background:#D4A017;border-color:#D4A017;color:#fff;}
+  .journal-memo-star-icon{font-size:17px;line-height:1;}
   .journal-memo-edit-row .journal-cat-select,
   .journal-memo-edit-row .journal-time-input,
   .journal-memo-edit-row .journal-recur-select{border-color:var(--line);background:var(--surface);}
@@ -5395,10 +5403,6 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         </div>
         ${journalDatePickerOpen ? renderMiniDatePicker() : ''}
       </div>`;
-      if(holidayInfo){
-        const holidayBannerIcon = {annual:'🏖️', half_am:'🌤️', half_pm:'🌥️', quarter_am:'⏱️', quarter_pm:'⏱️', public:'🎌'}[holidayInfo.type] || '🎌';
-        html += `<div class="journal-holiday-banner">${holidayBannerIcon} 이 날은 ${escapeHtml(holidayInfo.label)}로 표시돼 있어요</div>`;
-      }
 
       // 오늘 요약 — 스크롤 안 해도 오늘 급한 것/미팅/완료 현황이 한눈에 보이게
       const summaryUrgentCount = tasksForDate(jd, 'todo').filter(isTaskUrgentToday).length + tasksForDate(jd, 'issue').filter(isTaskUrgentToday).length;
@@ -6195,10 +6199,9 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                 <label>날짜</label>
                 <input type="date" value="${escapeHtml(memoTask.createdDate||journalDate)}" onchange="App.updateJournalTaskCreatedDate('${memoTask.id}', this.value)" />
               </div>
-              <label class="journal-memo-done-row" onclick="event.preventDefault();App.toggleJournalTaskStar('${memoTask.id}')">
-                <span class="star-toggle ${memoTask.starred?'is-starred':''}" style="cursor:pointer;">${memoTask.starred?'★':'☆'}</span>
-                중요 표시
-              </label>
+              <button type="button" class="journal-memo-star-btn ${memoTask.starred?'is-starred':''}" onclick="App.toggleJournalTaskStar('${memoTask.id}')">
+                <span class="journal-memo-star-icon">${memoTask.starred?'★':'☆'}</span> ${memoTask.starred?'중요 표시됨':'중요 표시하기'}
+              </button>
               ${(!memoTask.recurrence && !journalMemoIsNew) ? `
                 <label class="journal-memo-done-row">
                   <input type="checkbox" ${memoTask.done?'checked':''} onchange="App.toggleJournalTaskDone('${memoTask.id}', '${journalDate}')" />
