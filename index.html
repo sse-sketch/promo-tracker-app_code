@@ -301,7 +301,26 @@
   .journal-date{font-family:var(--serif);font-size:17px;font-weight:700;color:var(--ink);min-width:200px;text-align:center;}
   .journal-today-badge{font-size:11px;font-weight:700;color:var(--brand);background:var(--brand-soft);padding:2px 8px;border-radius:999px;margin-left:6px;}
   .journal-today-btn{padding:6px 12px;font-size:12px;}
-  .journal-holiday-select{position:absolute;right:0;top:50%;transform:translateY(-50%);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px;background:var(--surface);cursor:pointer;font-family:var(--sans);}
+  .journal-holiday-wrap{position:absolute;right:0;top:50%;transform:translateY(-50%);}
+  .journal-holiday-btn{padding:6px 12px;font-size:12px;font-weight:700;white-space:nowrap;}
+  @media (max-width:520px){
+    .journal-holiday-wrap{position:static;transform:none;display:flex;justify-content:center;margin:8px auto 0;width:fit-content;}
+  }
+  .journal-holiday-backdrop{position:fixed;inset:0;z-index:69;}
+  .journal-holiday-popover{
+    position:absolute;top:calc(100% + 8px);right:0;z-index:70;background:var(--surface);
+    border:1px solid var(--line);border-radius:12px;padding:12px;width:220px;
+    box-shadow:0 12px 28px -10px rgba(35,46,41,0.35);
+  }
+  .journal-holiday-popover-title{font-size:11.5px;font-weight:700;color:var(--ink-faint);margin-bottom:8px;}
+  .journal-holiday-pills{display:flex;flex-wrap:wrap;gap:6px;}
+  .journal-holiday-pill{
+    display:inline-block;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:600;
+    background:var(--surface-2);color:var(--ink-soft);cursor:pointer;border:1px solid transparent;
+    transition:transform .08s ease;
+  }
+  .journal-holiday-pill:hover{transform:scale(1.04);}
+  .journal-holiday-pill.active{background:var(--brand);color:#fff;}
   .journal-holiday-banner{background:#FDF2DC;color:#96650F;border:1px solid #E8CE9A;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;margin:10px 0 14px;}
   .journal-summary-strip{display:flex;gap:14px;flex-wrap:wrap;padding:10px 4px 14px;font-size:13px;font-weight:700;color:var(--ink-soft);}
   .journal-summary-item.is-hot{color:var(--urgent);}
@@ -336,7 +355,9 @@
   .journal-input:hover, .journal-input:focus{outline:none;border-color:var(--line);background:var(--surface);}
   .journal-input:focus{outline:none;border-color:var(--brand);}
   .journal-add-btn{padding:8px 14px;font-size:12.5px;}
-  .journal-done-toggle{font-size:12px;color:var(--ink-faint);cursor:pointer;margin-top:10px;user-select:none;}
+  .journal-done-toggle{font-size:12px;color:var(--ink-faint);cursor:pointer;margin:0;user-select:none;}
+  .journal-actions-cluster{display:flex;flex-direction:column;align-items:flex-start;gap:10px;margin-top:10px;}
+  .journal-actions-cluster .journal-list{width:100%;}
   .journal-done-toggle:hover{color:var(--ink-soft);}
   .journal-task-row{display:flex;align-items:center;gap:10px;padding:11px 2px;}
   .journal-task-row input[type=checkbox]{width:17px;height:17px;accent-color:var(--brand);cursor:pointer;flex-shrink:0;}
@@ -438,7 +459,7 @@
   .journal-did-row input{flex:1;min-width:0;border:none;background:transparent;font-family:var(--sans);font-size:13.5px;color:var(--ink);padding:4px 0;}
   .journal-did-row input:focus{outline:none;border-bottom:1px solid var(--brand);}
   .time-grid-v-wrap{display:grid;grid-template-columns:1fr 1fr;gap:14px;border:1px solid var(--line);border-radius:12px;padding:10px 12px 12px;background:linear-gradient(180deg,#FAFAF7,#FFFFFF);}
-  .time-grid-v-wrap.is-holiday{opacity:0.5;filter:grayscale(0.3);}
+  .time-grid-v-col.is-holiday{opacity:0.5;filter:grayscale(0.3);}
   @media (max-width:480px){ .time-grid-v-wrap{grid-template-columns:1fr;} }
   .time-grid-week-wrap{display:flex;gap:6px;border:1px solid var(--line);border-radius:12px;padding:10px 10px 12px;background:linear-gradient(180deg,#FAFAF7,#FFFFFF);overflow-x:auto;}
   .time-grid-week-hours{width:38px;flex-shrink:0;position:relative;}
@@ -463,6 +484,8 @@
   .time-grid-v-track:hover{background:rgba(122,110,90,0.05);}
   .time-grid-v-lunch{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,rgba(136,135,128,0.10),rgba(136,135,128,0.10) 6px,rgba(136,135,128,0.04) 6px,rgba(136,135,128,0.04) 12px);border-top:1px dashed var(--ink-faint);border-bottom:1px dashed var(--ink-faint);z-index:0;}
   .time-grid-v-offhours{position:absolute;left:0;right:0;background:rgba(120,115,105,0.06);z-index:0;pointer-events:none;}
+  .time-grid-v-leaveband{background:rgba(201,162,39,0.14);border-top:1px dashed #C9A227;border-bottom:1px dashed #C9A227;}
+  .time-grid-v-leaveband .time-grid-v-lunch-label{color:#96650F;font-weight:700;}
   .time-grid-v-lunch-label{position:absolute;top:2px;left:4px;font-size:9.5px;color:var(--ink-faint);white-space:nowrap;}
   .time-grid-v-now{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--urgent);z-index:5;}
   .time-grid-now-dot{position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:50%;background:var(--urgent);box-shadow:0 0 0 3px rgba(175,74,65,0.18);}
@@ -1720,6 +1743,8 @@
   function setJournalSearchQuery(v){ journalSearchQuery = v; render(); }
   let journalCalendarMonth = new Date();
   let journalDatePickerOpen = false;
+  let journalHolidayPickerOpen = false;
+  function toggleJournalHolidayPicker(){ journalHolidayPickerOpen = !journalHolidayPickerOpen; render(); }
   let miniCalMode = 'day'; // 'day' | 'month' — 날짜 라벨 누르면 월 선택 모드로 전환
   function toggleJournalDatePicker(){
     journalDatePickerOpen = !journalDatePickerOpen;
@@ -2439,10 +2464,32 @@
     if(!journalEntries[date].autoLogged) journalEntries[date].autoLogged = []; // 예전 데이터 하위호환
     return journalEntries[date];
   }
+  // 2026년 대한민국 공휴일(관공서 기준) — 자동으로 표시해줌. 수동으로 연차 지정하거나 "평일"로 해제한 게
+  // 있으면 그게 항상 우선함(이 표는 아무것도 손 안 댄 날에만 기본값으로 적용됨)
+  const KOREAN_HOLIDAYS_2026 = {
+    '2026-01-01': '신정',
+    '2026-02-16': '설날 연휴', '2026-02-17': '설날', '2026-02-18': '설날 연휴',
+    '2026-03-01': '삼일절', '2026-03-02': '대체공휴일(삼일절)',
+    '2026-05-05': '어린이날', '2026-05-24': '부처님오신날', '2026-05-25': '대체공휴일(부처님오신날)',
+    '2026-06-06': '현충일',
+    '2026-08-15': '광복절', '2026-08-17': '대체공휴일(광복절)',
+    '2026-09-24': '추석 연휴', '2026-09-25': '추석', '2026-09-26': '추석 연휴',
+    '2026-10-03': '개천절', '2026-10-05': '대체공휴일(개천절)', '2026-10-09': '한글날',
+    '2026-12-25': '크리스마스'
+  };
+  function getEffectiveHoliday(jd){
+    const entry = journalEntries[jd];
+    if(entry && entry.holiday !== undefined) return entry.holiday; // 수동으로 지정/해제한 게 있으면 그게 우선
+    return KOREAN_HOLIDAYS_2026[jd] ? { type:'public', label: KOREAN_HOLIDAYS_2026[jd] } : null;
+  }
   // 연차/공휴일 표시 — journalEntries에 날짜별로 같이 저장(새 저장소 안 만들고 기존 구조에 얹음)
+  const HOLIDAY_TYPE_LABELS = {
+    annual: '연차', half_am: '오전반차', half_pm: '오후반차',
+    quarter_am: '오전반반차', quarter_pm: '오후반반차'
+  };
   function setJournalHoliday(jd, type){
     const entry = getJournalEntry(jd);
-    entry.holiday = type ? { type, label: type === 'annual' ? '연차' : '공휴일' } : null;
+    entry.holiday = type ? { type, label: HOLIDAY_TYPE_LABELS[type] || (KOREAN_HOLIDAYS_2026[jd] || '공휴일') } : null;
     persistJournal();
     render();
   }
@@ -2697,6 +2744,9 @@
   // 공식 근무시간 — 이 밖의 시간대는 시간표에서 살짝 흐리게 표시함 (지금은 08:00~17:00)
   const WORK_START_MIN = 8 * 60;
   const WORK_END_MIN = 17 * 60;
+  // 반반차 시간대 — 오전 08~10시, 오후 15~17시 (정확히 2시간)
+  const QUARTER_AM_START = 8 * 60, QUARTER_AM_END = 10 * 60;
+  const QUARTER_PM_START = 15 * 60, QUARTER_PM_END = 17 * 60;
   function timeToMinutes(t){
     const norm = normalizeTime(t);
     if(!norm) return null;
@@ -2782,7 +2832,7 @@
     ];
     const nowMin = (jd === todayISO()) ? (new Date().getHours()*60 + new Date().getMinutes()) : null;
     const kindIconMap = { todo:'📌', issue:'👀', meeting:'🗣️', proposal:'💡', call:'📞', review:'📋' };
-    function renderHalf(half){
+    function renderHalf(half, dimmed){
       const totalMin = half.end - half.start;
       const colHeight = (totalMin / 60) * HOUR_PX_V;
       // 겹치는 구간이 있으면 양쪽 다 보여주되(하나의 일정이 이어진다는 걸 알 수 있게), 각 조각에 어느 쪽으로
@@ -2819,6 +2869,17 @@
       const offHoursHtml = offHoursBands.map(([s, e]) =>
         `<div class="time-grid-v-offhours" style="top:${((s-half.start)/totalMin)*colHeight}px;height:${((e-s)/totalMin)*colHeight}px;"></div>`
       ).join('');
+      // 반반차는 정확히 2시간(오전 08~10시 / 오후 15~17시)만 흐리게 표시함 — 반차처럼 절반 전체를 흐리게 하지 않음
+      let leaveBandHtml = '';
+      if(holidayInfo2 && (holidayInfo2.type === 'quarter_am' || holidayInfo2.type === 'quarter_pm')){
+        const isAmQuarter = holidayInfo2.type === 'quarter_am';
+        const qStart = isAmQuarter ? QUARTER_AM_START : QUARTER_PM_START;
+        const qEnd = isAmQuarter ? QUARTER_AM_END : QUARTER_PM_END;
+        const bandStart = Math.max(qStart, half.start), bandEnd = Math.min(qEnd, half.end);
+        if(bandEnd > bandStart){
+          leaveBandHtml = `<div class="time-grid-v-offhours time-grid-v-leaveband" style="top:${((bandStart-half.start)/totalMin)*colHeight}px;height:${((bandEnd-bandStart)/totalMin)*colHeight}px;" title="${escapeHtml(holidayInfo2.label)}"><span class="time-grid-v-lunch-label">${escapeHtml(holidayInfo2.label)}</span></div>`;
+        }
+      }
       const eventsHtml = halfBlocks.map(b => {
         const topPx = ((b.startMin - half.start) / totalMin) * colHeight;
         let heightPx = ((b.endMin - b.startMin) / totalMin) * colHeight;
@@ -2854,22 +2915,24 @@
         </div>`;
       }).join('');
       return `
-        <div class="time-grid-v-col">
+        <div class="time-grid-v-col ${dimmed?'is-holiday':''}">
           <div class="time-grid-h-half-label">${half.label}</div>
           <div style="display:flex;gap:8px;">
             <div class="time-grid-v-hours" style="height:${colHeight}px;">${hourLabelsHtml}</div>
-            <div class="time-grid-v-track" style="height:${colHeight}px;cursor:pointer;" title="빈 곳을 클릭하면 그 시각으로 할일이 바로 만들어져요" onclick="App.handleTimeGridTrackClick(event, '${jd}', ${half.start}, ${totalMin}, ${colHeight})">${offHoursHtml}${lunchHtml}${nowLineHtml}${eventsHtml}</div>
+            <div class="time-grid-v-track" style="height:${colHeight}px;cursor:pointer;" title="빈 곳을 클릭하면 그 시각으로 할일이 바로 만들어져요" onclick="App.handleTimeGridTrackClick(event, '${jd}', ${half.start}, ${totalMin}, ${colHeight})">${offHoursHtml}${leaveBandHtml}${lunchHtml}${nowLineHtml}${eventsHtml}</div>
           </div>
         </div>
       `;
     }
-    const isHolidayDay = !!getJournalEntry(jd).holiday;
+    const holidayInfo2 = getEffectiveHoliday(jd);
+    const dimAM = !!(holidayInfo2 && ['annual','public','half_am'].includes(holidayInfo2.type));
+    const dimPM = !!(holidayInfo2 && ['annual','public','half_pm'].includes(holidayInfo2.type));
     return `
       <div class="journal-section">
         <div class="journal-section-label">🕐 오늘 시간표 ${infoTip('할일에 시작~종료 시각을 넣으면 여기에 길이대로 표시돼요. 겹치는 시간대는 옆으로 나란히 배치되고, 오전/오후 두 열로 나눠서 보여줘요.', 220)}</div>
-        <div class="time-grid-v-wrap ${isHolidayDay ? 'is-holiday' : ''}">
-          ${renderHalf(halves[0])}
-          ${renderHalf(halves[1])}
+        <div class="time-grid-v-wrap">
+          ${renderHalf(halves[0], dimAM)}
+          ${renderHalf(halves[1], dimPM)}
         </div>
       </div>
     `;
@@ -2920,7 +2983,7 @@
       }).join('');
       const dowLabelClass = d.getDay() === 0 ? 'is-sunday' : d.getDay() === 6 ? 'is-saturday' : '';
       const isWeekendCol = d.getDay() === 0 || d.getDay() === 6;
-      const isHolidayCol = !!getJournalEntry(dateStr).holiday;
+      const isHolidayCol = !!getEffectiveHoliday(dateStr);
       dayColsHtml.push(`
         <div class="time-grid-week-col ${isToday?'is-today':''} ${isWeekendCol?'is-weekend':''} ${isHolidayCol?'is-holiday':''}">
           <div class="time-grid-week-day-label ${dowLabelClass}" onclick="App.journalGoToDate('${dateStr}')" title="이 날 일별로 보기">${dowNames[d.getDay()]}<span class="time-grid-week-day-num">${d.getDate()}</span></div>
@@ -4439,7 +4502,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       </div>
     `;
 
-    const todayHoliday = getJournalEntry(todayISO()).holiday;
+    const todayHoliday = getEffectiveHoliday(todayISO());
     html += `
       <div class="stats-row">
         ${todayHoliday ? `<div class="stat-card stat-card-clickable stat-card-holiday" onclick="App.journalGoToday();App.setMainTab('journal');"><div class="stat-num">${todayHoliday.type==='annual'?'🏖️':'🎌'}</div><div class="stat-label">오늘 ${escapeHtml(todayHoliday.label)}</div></div>` : ''}
@@ -5293,22 +5356,40 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       const dObj = new Date(jd + 'T00:00:00');
       const dowNames = ['일','월','화','수','목','금','토'];
       const dateLabel = `${dObj.getFullYear()}. ${String(dObj.getMonth()+1).padStart(2,'0')}. ${String(dObj.getDate()).padStart(2,'0')} (${dowNames[dObj.getDay()]})`;
-      const holidayInfo = getJournalEntry(jd).holiday;
+      const holidayInfo = getEffectiveHoliday(jd);
+      const HOLIDAY_OPTS = [
+        { value:'', icon:'📋', label:'평일' },
+        { value:'annual', icon:'🏖️', label:'연차' },
+        { value:'half_am', icon:'🌤️', label:'오전반차' },
+        { value:'half_pm', icon:'🌥️', label:'오후반차' },
+        { value:'quarter_am', icon:'⏱️', label:'오전반반차' },
+        { value:'quarter_pm', icon:'⏱️', label:'오후반반차' },
+        { value:'public', icon:'🎌', label:'공휴일' }
+      ];
+      const currentHolidayOpt = HOLIDAY_OPTS.find(o => o.value === (holidayInfo ? holidayInfo.type : '')) || HOLIDAY_OPTS[0];
 
       html += `<div class="journal-nav" style="position:relative;">
         <button class="icon-btn" onclick="App.journalShiftDay(-1)">‹</button>
         <div class="journal-date" style="cursor:pointer;" onclick="App.toggleJournalDatePicker()" title="날짜로 바로 이동">${dateLabel}</div>
         <button class="icon-btn" onclick="App.journalShiftDay(1)">›</button>
         <button class="btn btn-ghost journal-today-btn ${isToday?'is-current':''}" onclick="${isToday ? '' : "App.journalGoToday()"}">오늘</button>
-        <select class="journal-holiday-select" onchange="App.setJournalHoliday('${jd}', this.value)" title="연차/공휴일 표시">
-          <option value="" ${!holidayInfo?'selected':''}>평일</option>
-          <option value="annual" ${holidayInfo&&holidayInfo.type==='annual'?'selected':''}>🏖️ 연차</option>
-          <option value="public" ${holidayInfo&&holidayInfo.type==='public'?'selected':''}>🎌 공휴일</option>
-        </select>
+        <div class="journal-holiday-wrap">
+          <button type="button" class="btn btn-ghost journal-holiday-btn" onclick="event.stopPropagation();App.toggleJournalHolidayPicker()">${currentHolidayOpt.icon} ${currentHolidayOpt.label} ▾</button>
+          ${journalHolidayPickerOpen ? `
+            <div class="journal-holiday-backdrop" onclick="App.toggleJournalHolidayPicker()"></div>
+            <div class="journal-holiday-popover">
+              <div class="journal-holiday-popover-title">이 날의 근무 상태</div>
+              <div class="journal-holiday-pills">
+                ${HOLIDAY_OPTS.map(o => `<span class="journal-holiday-pill ${o.value===currentHolidayOpt.value?'active':''}" onclick="App.setJournalHoliday('${jd}', '${o.value}');App.toggleJournalHolidayPicker();">${o.icon} ${o.label}</span>`).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
         ${journalDatePickerOpen ? renderMiniDatePicker() : ''}
       </div>`;
       if(holidayInfo){
-        html += `<div class="journal-holiday-banner">${holidayInfo.type==='annual'?'🏖️':'🎌'} 이 날은 ${escapeHtml(holidayInfo.label)}로 표시돼 있어요</div>`;
+        const holidayBannerIcon = {annual:'🏖️', half_am:'🌤️', half_pm:'🌥️', quarter_am:'⏱️', quarter_pm:'⏱️', public:'🎌'}[holidayInfo.type] || '🎌';
+        html += `<div class="journal-holiday-banner">${holidayBannerIcon} 이 날은 ${escapeHtml(holidayInfo.label)}로 표시돼 있어요</div>`;
       }
 
       // 오늘 요약 — 스크롤 안 해도 오늘 급한 것/미팅/완료 현황이 한눈에 보이게
@@ -5360,19 +5441,21 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
             <div class="journal-subgroup-label journal-subgroup-urgent">🔴 오늘/지난 마감 · D-day 급한 순</div>
             <div class="journal-list">${urgentTasks.map(task => journalTaskRowHtml(task, jd, placeholder, taskUrgencyN(task) < 0 ? 'task-row-urgent-overdue' : 'task-row-urgent-today')).join('')}</div>
           ` : ''}
-          ${recurringTasks.length ? `
-            <div class="journal-done-toggle" onclick="App.toggleJournalGroupExpanded('${recurringKey}')">${recurringExpanded?'▾':'▸'} 🔁 반복 업무 ${recurringTasks.length}건</div>
-            ${recurringExpanded ? `<div class="journal-list" style="margin-top:8px;">${recurringTasks.map(task => journalTaskRowHtml(task, jd, placeholder, 'task-row-recurring')).join('')}</div>` : ''}
-          ` : ''}
-          ${normalTasks.length ? `
-            <div class="journal-done-toggle" onclick="App.toggleJournalGroupExpanded('${normalKey}')">${normalExpanded?'▾':'▸'} 📋 그 외 할일 ${normalTasks.length}건</div>
-            ${normalExpanded ? `<div class="journal-list" style="margin-top:8px;">${normalTasks.map(task => journalTaskRowHtml(task, jd, placeholder)).join('')}</div>` : ''}
-          ` : ''}
-          <button type="button" class="btn btn-ghost journal-add-btn" onclick="App.addJournalTask('${category}')">+ 항목 추가</button>
-          ${doneTasks.length ? `
-            <div class="journal-done-toggle" onclick="App.toggleJournalDoneExpanded('${doneKey}')">${doneExpanded?'▾':'▸'} 완료 ${doneTasks.length}건 ${doneExpanded?'숨기기':'보기'}</div>
-            ${doneExpanded ? `<div class="journal-list" style="margin-top:8px;">${doneTasks.map(task => journalTaskRowHtml(task, jd, placeholder)).join('')}</div>` : ''}
-          ` : ''}
+          <div class="journal-actions-cluster">
+            ${recurringTasks.length ? `
+              <div class="journal-done-toggle" onclick="App.toggleJournalGroupExpanded('${recurringKey}')">${recurringExpanded?'▾':'▸'} 🔁 반복 업무 ${recurringTasks.length}건</div>
+              ${recurringExpanded ? `<div class="journal-list">${recurringTasks.map(task => journalTaskRowHtml(task, jd, placeholder, 'task-row-recurring')).join('')}</div>` : ''}
+            ` : ''}
+            ${normalTasks.length ? `
+              <div class="journal-done-toggle" onclick="App.toggleJournalGroupExpanded('${normalKey}')">${normalExpanded?'▾':'▸'} 📋 그 외 할일 ${normalTasks.length}건</div>
+              ${normalExpanded ? `<div class="journal-list">${normalTasks.map(task => journalTaskRowHtml(task, jd, placeholder)).join('')}</div>` : ''}
+            ` : ''}
+            <button type="button" class="btn btn-ghost journal-add-btn" onclick="App.addJournalTask('${category}')">+ 항목 추가</button>
+            ${doneTasks.length ? `
+              <div class="journal-done-toggle" onclick="App.toggleJournalDoneExpanded('${doneKey}')">${doneExpanded?'▾':'▸'} 완료 ${doneTasks.length}건 ${doneExpanded?'숨기기':'보기'}</div>
+              ${doneExpanded ? `<div class="journal-list">${doneTasks.map(task => journalTaskRowHtml(task, jd, placeholder)).join('')}</div>` : ''}
+            ` : ''}
+          </div>
         </div>`;
       }
       if(journalSelectedIds.size > 0){
@@ -5405,7 +5488,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       }
       const todoCountForTab = tasksForDate(jd, 'todo').length;
       const issueCountForTab = tasksForDate(jd, 'issue').length;
-      html += `<div class="tabs" style="margin-bottom:0;">
+      html += `<div class="tabs" style="margin-bottom:14px;">
         <div class="tab ${journalUnifiedTab==='todo'?'active':''}" onclick="App.toggleJournalUnifiedTab('todo')">📌 업무 기록${todoCountForTab?` (${todoCountForTab})`:''}</div>
         <div class="tab ${journalUnifiedTab==='issue'?'active':''}" onclick="App.toggleJournalUnifiedTab('issue')">👀 팔로우업${issueCountForTab?` (${issueCountForTab})`:''}</div>
       </div>`;
@@ -6297,6 +6380,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     journalWeekNext,
     journalGoToDate,
     toggleJournalDatePicker,
+    toggleJournalHolidayPicker,
     toggleMiniCalMode,
     miniCalYearShift,
     miniCalPickMonth,
