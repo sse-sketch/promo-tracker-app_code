@@ -306,14 +306,14 @@
   @media (max-width:520px){
     .journal-holiday-wrap{position:static;transform:none;display:flex;justify-content:center;margin:8px auto 0;width:fit-content;}
   }
-  .journal-holiday-backdrop{position:fixed;inset:0;z-index:69;}
+  .journal-holiday-backdrop{position:fixed;inset:0;z-index:499;}
   .journal-holiday-popover{
-    position:absolute;top:calc(100% + 8px);right:0;z-index:70;background:var(--surface);
-    border:1px solid var(--line);border-radius:12px;padding:12px;width:220px;
-    box-shadow:0 12px 28px -10px rgba(35,46,41,0.35);
+    position:absolute;top:calc(100% + 8px);right:0;z-index:500;background:#FFFFFF;
+    border:1px solid var(--line);border-radius:12px;padding:12px;width:250px;
+    box-shadow:0 12px 28px -10px rgba(35,46,41,0.35);overflow:visible;
   }
   .journal-holiday-popover-title{font-size:11.5px;font-weight:700;color:var(--ink-faint);margin-bottom:8px;}
-  .journal-holiday-pills{display:flex;flex-wrap:wrap;gap:6px;}
+  .journal-holiday-pills{display:flex;flex-wrap:wrap;gap:6px;overflow:visible;}
   .journal-holiday-pill{
     display:inline-block;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:600;
     background:var(--surface-2);color:var(--ink-soft);cursor:pointer;border:1px solid transparent;
@@ -520,13 +520,8 @@
   .time-grid-block-time{font-weight:800;font-size:10.5px;opacity:0.85;letter-spacing:0.01em;}
   .time-grid-block-label{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
   .time-grid-block-note{font-size:10px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;}
-  .time-grid-block-linked{background:var(--urgent-soft);color:var(--urgent);border-left-color:var(--urgent);}
-  .time-grid-block-todo{background:var(--brand-soft);color:var(--brand);border-left-color:var(--brand);}
-  .time-grid-block-issue{background:#F6E9E7;color:#9A5A1E;border-left-color:#C97A32;}
-  .time-grid-block-meeting{background:#E9F0FB;color:#2F5496;border-left-color:#5B85C4;}
-  .time-grid-block-proposal{background:#FDF2DC;color:#96650F;border-left-color:#D4A13B;}
-  .time-grid-block-call{background:#E5F5EC;color:#1F7A5C;border-left-color:#3FA37D;}
-  .time-grid-block-review{background:#F3EAFA;color:#6E3499;border-left-color:#9A63C4;}
+  .time-grid-block-neutral{background:var(--surface-2);color:var(--ink-soft);border-left-color:var(--line);}
+  .time-grid-block-important{background:#FDF2DC;color:#96650F;border-left-color:#C9A227;}
   .week-list{display:flex;flex-direction:column;gap:14px;}
   .week-day{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;}
   .week-day.is-today{border-color:var(--brand);background:var(--brand-soft);}
@@ -2886,7 +2881,7 @@
         heightPx = Math.max(heightPx, 32); // 2줄(제목+시간)이 들어가야 하니 최소 높이를 좀 더 넉넉하게
         const widthPct = 100 / b._laneCount;
         const leftPct = b._lane * widthPct;
-        const kindClass = b.isDeadlineMarker ? 'time-grid-block-linked' : (b.isLinked ? 'time-grid-block-linked' : `time-grid-block-${b.kind}`);
+        const kindClass = b.task.starred ? 'time-grid-block-important' : 'time-grid-block-neutral';
         const minutesToLabel = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
         const timeLabel = b.isDeadlineMarker
           ? `${minutesToLabel(b.startMin)}~${minutesToLabel(b.realEndMin != null ? b.realEndMin : b.endMin)}`
@@ -2969,7 +2964,7 @@
         const heightPx = Math.max(((b.endMin - b.startMin) / totalMin) * colHeight, 32);
         const widthPct = 100 / b._laneCount;
         const leftPct = b._lane * widthPct;
-        const kindClass = b.isDeadlineMarker ? 'time-grid-block-linked' : (b.isLinked ? 'time-grid-block-linked' : `time-grid-block-${b.kind}`);
+        const kindClass = b.task.starred ? 'time-grid-block-important' : 'time-grid-block-neutral';
         const icon = b.isDeadlineMarker ? '⏰' : (b.isLinked ? '🎯' : ({todo:'📌',issue:'👀',meeting:'🗣️',proposal:'💡',call:'📞',review:'📋'}[b.kind] || '📌'));
         const minutesToLabelW = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
         const timeLabel = b.isDeadlineMarker
@@ -5358,7 +5353,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       const dateLabel = `${dObj.getFullYear()}. ${String(dObj.getMonth()+1).padStart(2,'0')}. ${String(dObj.getDate()).padStart(2,'0')} (${dowNames[dObj.getDay()]})`;
       const holidayInfo = getEffectiveHoliday(jd);
       const HOLIDAY_OPTS = [
-        { value:'', icon:'📋', label:'평일' },
+        { value:'', icon:'📋', label:'근무일' },
         { value:'annual', icon:'🏖️', label:'연차' },
         { value:'half_am', icon:'🌤️', label:'오전반차' },
         { value:'half_pm', icon:'🌥️', label:'오후반차' },
