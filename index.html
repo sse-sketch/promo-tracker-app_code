@@ -306,14 +306,7 @@
   @media (max-width:520px){
     .journal-holiday-wrap{position:static;transform:none;display:flex;justify-content:center;margin:8px auto 0;width:fit-content;}
   }
-  .journal-holiday-backdrop{position:fixed;inset:0;z-index:499;}
-  .journal-holiday-popover{
-    position:absolute;top:calc(100% + 8px);right:0;z-index:500;background:#FFFFFF;
-    border:1px solid var(--line);border-radius:12px;padding:12px;width:280px;
-    box-shadow:0 12px 28px -10px rgba(35,46,41,0.35);overflow:visible;
-  }
-  .journal-holiday-popover-title{font-size:11.5px;font-weight:700;color:var(--ink-faint);margin-bottom:8px;}
-  .journal-holiday-pills{display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;overflow:visible;}
+  .journal-holiday-pills{display:grid;grid-template-columns:repeat(4, 1fr);gap:8px;overflow:visible;margin-top:6px;}
   .journal-holiday-pill{
     display:block;text-align:center;padding:6px 4px;border-radius:8px;font-size:11px;font-weight:600;
     background:var(--surface-2);color:var(--ink-soft);cursor:pointer;border:1px solid transparent;
@@ -3222,6 +3215,18 @@
     const task = journalTasks.find(t => t.id === id);
     if(!task) return;
     const dateKey = dateStr || todayISO(); // 명시 안 하면 오늘 기준(이전엔 화면에 떠있던 journalDate를 써서, 주별뷰/대시보드에서 엉뚱한 날짜가 체크되는 버그가 있었음)
+    // '제안' 타입 할일을 완료로 체크하는 순간(체크 해제 말고 체크할 때만)엔, 후속 업무로 이어갈지 먼저 물어봄 —
+    // 제안서 쓰는 걸로 끝나는 게 아니라 보통 실제 세팅/후속 확인 업무가 따라오는 경우가 많아서
+    if(!task.recurrence && !task.done && !task.linkedItemId && task.taskType === 'proposal'){
+      confirmModal = {
+        message: `"${task.text}" 완료 처리할게요.\n관련 후속 업무도 이어서 만들까요?`,
+        type: 'proposalFollowup',
+        payload: { id, dateKey },
+        proposalFollowup: true
+      };
+      render();
+      return;
+    }
     if(!task.recurrence){
       task.done = !task.done;
       task.completedDate = task.done ? dateKey : null; // 정확히 언제 완료했는지 기록(월별뷰 점 표시용)
@@ -3484,8 +3489,13 @@
     modalState = {
       mode:'add', tab: AppStorage.hasNative() ? 'paste' : 'manual', editId:null,
       form:{channel:'', title:'', period:'', content:'', deadline:'', deadlineTime:'', status:'pending', notes:'', coupon:'', needsRecheck:false, setupTasks:[], setupType:'', setupDeadline:'', selection:'pending', assignee:''},
-      pasteText:'', pastedImages:[], reviewItems:null, reviewTasks:null, parsing:false, parseError:''
+      pasteText:'', pastedImages:[], reviewItems:null, reviewTasks:null, parsing:false, parseError:'', detailsExpanded:false
     };
+    render();
+  }
+  function toggleAddFormDetails(){
+    if(!modalState) return;
+    modalState.detailsExpanded = !modalState.detailsExpanded;
     render();
   }
   function openEditModal(id){
@@ -3494,7 +3504,7 @@
     modalState = {
       mode:'edit', tab:'manual', editId:id,
       form:{channel:item.channel, title:item.title||'', period:item.period, content:item.content, deadline:item.deadline, deadlineTime:item.deadlineTime||'', status:item.status||'pending', notes:item.notes||'', coupon:item.coupon||'', needsRecheck:!!item.needsRecheck, setupTasks:(item.setupTasks||[]).map(t=>({id:t.id, label:t.label, done:!!t.done})), setupType:item.setupType||'', setupDeadline:item.setupDeadline||'', selection: item.selection || (item.status==='submitted' ? 'selected' : 'pending'), assignee:item.assignee||''},
-      pasteText:'', pastedImages:[], parsing:false, parseError:''
+      pasteText:'', pastedImages:[], parsing:false, parseError:'', detailsExpanded:true
     };
     render();
   }
@@ -3599,8 +3609,30 @@
         if(value === 'complete') toggleJournalTaskDone(cm.payload.id, cm.payload.dateStr);
         else if(value === 'delete') removeJournalTask(cm.payload.id);
         break;
+      case 'proposalFollowup':
+        completeProposalTask(cm.payload.id, cm.payload.dateKey, value === 'convert');
+        break;
     }
     render();
+  }
+  // '제안' 완료 처리 — 전환을 골랐으면 같은 내용으로 후속 '할일'을 하나 만들어서 바로 메모를 열어줌
+  // (제목 채워넣고 필요한 세부사항 추가하기 편하게)
+  function completeProposalTask(id, dateKey, shouldConvert){
+    const task = journalTasks.find(t => t.id === id);
+    if(!task) return;
+    task.done = true;
+    task.completedDate = dateKey;
+    if(shouldConvert){
+      const newId = 'jt_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+      const draft = {
+        id: newId, text: `${task.text} 후속 처리`, category:'todo', taskType:'todo', recurrence:null, done:false, doneDates:{},
+        createdDate: dateKey, time:'', notes:'', dueDate:'', completedDate:null
+      };
+      floatingDetail = { type:'memo', taskId: newId, draft };
+      journalMemoDirty = false;
+      journalMemoIsNew = true;
+    }
+    persistJournalTasks();
   }
 
   let undoStack = null; // { items:[...], label:str, timeoutId }
@@ -5391,18 +5423,24 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         <button class="btn btn-ghost journal-today-btn ${isToday?'is-current':''}" onclick="${isToday ? '' : "App.journalGoToday()"}">오늘</button>
         <div class="journal-holiday-wrap">
           <button type="button" class="btn btn-ghost journal-holiday-btn" onclick="event.stopPropagation();App.toggleJournalHolidayPicker()">${currentHolidayOpt.icon} ${currentHolidayOpt.label} ▾</button>
-          ${journalHolidayPickerOpen ? `
-            <div class="journal-holiday-backdrop" onclick="App.toggleJournalHolidayPicker()"></div>
-            <div class="journal-holiday-popover">
-              <div class="journal-holiday-popover-title">이 날의 근무 상태</div>
-              <div class="journal-holiday-pills">
-                ${HOLIDAY_OPTS.map(o => `<span class="journal-holiday-pill ${o.value===currentHolidayOpt.value?'active':''}" onclick="App.setJournalHoliday('${jd}', '${o.value}');App.toggleJournalHolidayPicker();">${o.icon} ${o.label}</span>`).join('')}
-              </div>
-            </div>
-          ` : ''}
         </div>
         ${journalDatePickerOpen ? renderMiniDatePicker() : ''}
       </div>`;
+      if(journalHolidayPickerOpen){
+        // 코너에 뜨는 팝오버 대신, 앱에 이미 있는 모달(가운데+배경 어두워짐) 방식을 그대로 씀 —
+        // "이건 원래 위에 뜨는 거구나"가 명확해서 뭘 가리는지 신경 안 써도 됨
+        html += `
+          <div class="overlay" onclick="if(event.target===this) App.toggleJournalHolidayPicker();">
+            <div class="modal" style="max-width:360px;">
+              <h2 class="modal-title">이 날의 근무 상태</h2>
+              <div class="journal-holiday-pills">
+                ${HOLIDAY_OPTS.map(o => `<span class="journal-holiday-pill ${o.value===currentHolidayOpt.value?'active':''}" onclick="App.setJournalHoliday('${jd}', '${o.value}');App.toggleJournalHolidayPicker();">${o.icon} ${o.label}</span>`).join('')}
+              </div>
+              <button type="button" class="btn btn-ghost" style="width:100%;margin-top:18px;" onclick="App.toggleJournalHolidayPicker()">닫기</button>
+            </div>
+          </div>
+        `;
+      }
 
       // 오늘 요약 — 스크롤 안 해도 오늘 급한 것/미팅/완료 현황이 한눈에 보이게
       const summaryUrgentCount = tasksForDate(jd, 'todo').filter(isTaskUrgentToday).length + tasksForDate(jd, 'issue').filter(isTaskUrgentToday).length;
@@ -5714,8 +5752,66 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
             </select>
           </div>
           <div class="field">
+            <label>제목 <span style="font-weight:400;color:var(--ink-faint);">(프로모션명)</span></label>
+            <input type="text" value="${escapeHtml(f.title||'')}" placeholder="예: [E4CZZ] 추석_얼리버드 1주차" oninput="App.updateField('title', this.value)" />
+          </div>
+          <div class="field">
             <label>프로모션 기간</label>
             <input type="text" value="${escapeHtml(f.period)}" placeholder="예: 8/20 ~ 8/31" oninput="App.updateField('period', this.value)" />
+          </div>
+          <div style="display:flex;gap:10px;">
+            <div class="field" style="flex:1;">
+              <label>제출 마감일</label>
+              <input type="date" value="${escapeHtml(f.deadline)}" oninput="App.updateField('deadline', this.value)" />
+            </div>
+            <div class="field" style="flex:1;">
+              <label>마감 시각 <span style="font-weight:400;color:var(--ink-faint);">(선택)</span></label>
+              <input type="text" value="${escapeHtml(f.deadlineTime||'')}" placeholder="예: 13:00" oninput="App.updateField('deadlineTime', this.value)" />
+            </div>
+          </div>
+          <div class="field">
+            <label>상태</label>
+            <select onchange="App.updateFieldAndRender('status', this.value)">
+              <option value="pending" ${f.status==='pending'?'selected':''}>대기중</option>
+              <option value="submitted" ${f.status==='submitted'?'selected':''}>제출완료</option>
+              <option value="na" ${f.status==='na'?'selected':''}>해당없음</option>
+              <option value="missed" ${f.status==='missed'?'selected':''}>미제출</option>
+            </select>
+          </div>
+          ${f.status === 'submitted' ? `
+            <div class="field">
+              <label>선정 여부 <span style="font-weight:400;color:var(--ink-faint);">(제출완료 ≠ 확정. 채널에서 실제로 골라줘야 확정이에요)</span></label>
+              <select onchange="App.updateField('selection', this.value)">
+                <option value="pending" ${f.selection==='pending'?'selected':''}>⏳ 선정 대기중</option>
+                <option value="selected" ${(!f.selection||f.selection==='selected')?'selected':''}>✅ 선정됨 (확정)</option>
+                <option value="rejected" ${f.selection==='rejected'?'selected':''}>❌ 미선정</option>
+              </select>
+            </div>
+          ` : ''}
+          <div class="field">
+            <label class="recheck-check">
+              <input type="checkbox" ${f.needsRecheck?'checked':''} onchange="App.updateField('needsRecheck', this.checked)" />
+              ⚠️ 재확인 필요 (TBD, 특가 미확정 등)
+            </label>
+          </div>
+          <div class="journal-done-toggle" style="margin:4px 0 14px;" onclick="App.toggleAddFormDetails()">${modalState.detailsExpanded?'▾':'▸'} 세부 정보 ${modalState.detailsExpanded?'숨기기':'더보기'} <span style="font-weight:400;color:var(--ink-faint);">(내용·담당자·쿠폰·비고·세팅)</span></div>
+          ${modalState.detailsExpanded ? `
+          <div class="field">
+            <label>내용 설명</label>
+            <textarea placeholder="프로모션 상세 내용을 입력하세요" oninput="App.updateField('content', this.value)">${escapeHtml(f.content)}</textarea>
+          </div>
+          <div class="field">
+            <label>담당자 <span style="font-weight:400;color:var(--ink-faint);">(선택, 팀원에게 위임한 경우 표시용)</span></label>
+            <input type="text" list="assigneeSuggestions" value="${escapeHtml(f.assignee||'')}" placeholder="예: 김대리" oninput="App.updateField('assignee', this.value)" />
+            <datalist id="assigneeSuggestions">${Array.from(new Set(items.map(i=>i.assignee).filter(Boolean))).map(a=>`<option value="${escapeHtml(a)}">`).join('')}</datalist>
+          </div>
+          <div class="field">
+            <label>쿠폰/할인율 정보</label>
+            <textarea placeholder="예: VIP·GOLD 10%(2만원↑, 최대5천) / SILVER이하 5%(1만원↑, 최대3천)" oninput="App.updateField('coupon', this.value)">${escapeHtml(f.coupon||'')}</textarea>
+          </div>
+          <div class="field">
+            <label>비고 <span style="font-weight:400;color:var(--ink-faint);">(참여상품 한정, 필수요건 등)</span></label>
+            <textarea placeholder="예: 바디케어/구강케어만 참여 가능" oninput="App.updateField('notes', this.value)">${escapeHtml(f.notes||'')}</textarea>
           </div>
           ${(() => {
             const tpl = CHANNEL_SETUP_TEMPLATES[(f.channel||'').trim()];
@@ -5752,54 +5848,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
               <button type="button" class="btn btn-ghost" style="padding:8px 12px;font-size:12.5px;" onclick="App.addDefaultSetupTasks()">${CHANNEL_SETUP_TEMPLATES[(f.channel||'').trim()] ? '채널 기본 항목 채우기' : '기본 항목 채우기'}</button>
             </div>
           </div>
-          <div class="field">
-            <label>제목 <span style="font-weight:400;color:var(--ink-faint);">(프로모션명)</span></label>
-            <input type="text" value="${escapeHtml(f.title||'')}" placeholder="예: [E4CZZ] 추석_얼리버드 1주차" oninput="App.updateField('title', this.value)" />
-          </div>
-          <div class="field">
-            <label>상태</label>
-            <select onchange="App.updateFieldAndRender('status', this.value)">
-              <option value="pending" ${f.status==='pending'?'selected':''}>대기중</option>
-              <option value="submitted" ${f.status==='submitted'?'selected':''}>제출완료</option>
-              <option value="na" ${f.status==='na'?'selected':''}>해당없음</option>
-              <option value="missed" ${f.status==='missed'?'selected':''}>미제출</option>
-            </select>
-          </div>
-          ${f.status === 'submitted' ? `
-            <div class="field">
-              <label>선정 여부 <span style="font-weight:400;color:var(--ink-faint);">(제출완료 ≠ 확정. 채널에서 실제로 골라줘야 확정이에요)</span></label>
-              <select onchange="App.updateField('selection', this.value)">
-                <option value="pending" ${f.selection==='pending'?'selected':''}>⏳ 선정 대기중</option>
-                <option value="selected" ${(!f.selection||f.selection==='selected')?'selected':''}>✅ 선정됨 (확정)</option>
-                <option value="rejected" ${f.selection==='rejected'?'selected':''}>❌ 미선정</option>
-              </select>
-            </div>
           ` : ''}
-          <div class="field">
-            <label>내용 설명</label>
-            <textarea placeholder="프로모션 상세 내용을 입력하세요" oninput="App.updateField('content', this.value)">${escapeHtml(f.content)}</textarea>
-          </div>
-          <div class="field">
-            <label>제출 마감일</label>
-            <input type="date" value="${escapeHtml(f.deadline)}" oninput="App.updateField('deadline', this.value)" />
-          </div>
-          <div class="field">
-            <label>마감 시각 <span style="font-weight:400;color:var(--ink-faint);">(선택, 예: 13:00, 오후 4시)</span></label>
-            <input type="text" value="${escapeHtml(f.deadlineTime||'')}" placeholder="예: 13:00" oninput="App.updateField('deadlineTime', this.value)" />
-          </div>
-          <div class="field">
-            <label>담당자 <span style="font-weight:400;color:var(--ink-faint);">(선택, 팀원에게 위임한 경우 표시용)</span></label>
-            <input type="text" list="assigneeSuggestions" value="${escapeHtml(f.assignee||'')}" placeholder="예: 김대리" oninput="App.updateField('assignee', this.value)" />
-            <datalist id="assigneeSuggestions">${Array.from(new Set(items.map(i=>i.assignee).filter(Boolean))).map(a=>`<option value="${escapeHtml(a)}">`).join('')}</datalist>
-          </div>
-          <div class="field">
-            <label>쿠폰/할인율 정보</label>
-            <textarea placeholder="예: VIP·GOLD 10%(2만원↑, 최대5천) / SILVER이하 5%(1만원↑, 최대3천)" oninput="App.updateField('coupon', this.value)">${escapeHtml(f.coupon||'')}</textarea>
-          </div>
-          <div class="field">
-            <label>비고 <span style="font-weight:400;color:var(--ink-faint);">(참여상품 한정, 필수요건 등)</span></label>
-            <textarea placeholder="예: 바디케어/구강케어만 참여 가능" oninput="App.updateField('notes', this.value)">${escapeHtml(f.notes||'')}</textarea>
-          </div>
           ${modalState.mode==='edit' && Array.isArray(items.find(i=>i.id===modalState.editId)?.history) && items.find(i=>i.id===modalState.editId).history.length ? `
           <div class="field">
             <label>📜 변경 이력</label>
@@ -5813,12 +5862,6 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
             </div>
           </div>
           ` : ''}
-          <div class="field">
-            <label class="recheck-check">
-              <input type="checkbox" ${f.needsRecheck?'checked':''} onchange="App.updateField('needsRecheck', this.checked)" />
-              ⚠️ 재확인 필요 (TBD, 특가 미확정 등)
-            </label>
-          </div>
           ${modalState.parseError ? `<div class="parse-error">${escapeHtml(modalState.parseError)}</div>` : ''}
           <div class="modal-footer">
             <button class="btn btn-ghost" onclick="App.closeModal()">취소</button>
@@ -6123,7 +6166,10 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
           <div class="modal confirm-modal">
             <p class="confirm-message">${escapeHtml(confirmModal.message)}</p>
             <div class="modal-footer">
-              ${confirmModal.checkAction ? `
+              ${confirmModal.proposalFollowup ? `
+                <button class="btn btn-ghost" onclick="App.chooseConfirm('skip')">비전환</button>
+                <button class="btn btn-primary" onclick="App.chooseConfirm('convert')">전환</button>
+              ` : confirmModal.checkAction ? `
                 <button class="btn btn-ghost" onclick="App.chooseConfirm('cancel')">취소</button>
                 <button class="btn btn-ghost" style="color:var(--urgent);" onclick="App.chooseConfirm('delete')">🗑 삭제</button>
                 <button class="btn btn-primary" onclick="App.chooseConfirm('complete')">✅ 완료 처리</button>
@@ -6321,6 +6367,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
 
   window.App = {
     openAdd: openAddModal,
+    toggleAddFormDetails,
     openEdit: openEditModal,
     closeModal,
     deleteItem,
