@@ -2068,8 +2068,18 @@
   function timeSelectOptions(selectedRaw){
     const selected = selectedRaw ? normalizeTime(selectedRaw) : '';
     let html = `<option value="">선택 안함</option>`;
-    for(let h = 0; h < 24; h++){
+    const startH = Math.floor(TIME_GRID_START_MIN / 60), endH = Math.floor(TIME_GRID_END_MIN / 60);
+    // 시간표에 실제로 걸리는 범위(07~21시)만 보여줘서 스크롤을 절반 가까이 줄임 —
+    // 기존에 그 범위 밖 시각이 저장돼 있으면(예: 22시) 목록에서 사라지지 않게 그것만 예외로 같이 넣어줌
+    if(selected){
+      const selMin = timeToMinutes(selected);
+      if(selMin !== null && (selMin < TIME_GRID_START_MIN || selMin > TIME_GRID_END_MIN)){
+        html += `<option value="${selected}" selected>${selected}</option>`;
+      }
+    }
+    for(let h = startH; h <= endH; h++){
       for(let m = 0; m < 60; m += 30){
+        if(h === endH && m > 0) break; // 끝 시각(21:30 등)은 범위를 살짝 넘어가니 제외
         const val = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
         html += `<option value="${val}" ${selected===val?'selected':''}>${val}</option>`;
       }
@@ -3169,6 +3179,15 @@
     const task = findJournalTaskForEdit(id);
     if(!task) return;
     task.time = value;
+    // 시작 시각 고르면 종료 시각을 1시간 뒤로 자동으로 잡아줌 — 매번 따로 스크롤해서 찾지 않아도 되고,
+    // 필요하면 종료 시각 쪽에서 얼마든지 다시 바꿀 수 있음
+    if(value){
+      const startMin = timeToMinutes(value);
+      if(startMin !== null){
+        const endMin = startMin + 60;
+        task.endTime = `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`;
+      }
+    }
     journalMemoDirty = true;
     render();
   }
