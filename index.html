@@ -1445,6 +1445,7 @@
     }
   }
   function updateBackupImportText(v){ backupImportText = v; }
+  function resetBackupImportText(){ backupImportText = ''; render(); }
 
   function exportCSV(){
     const statusLabel = s => s==='submitted' ? '제출완료' : s==='na' ? '해당없음' : s==='missed' ? '미제출' : '대기중';
@@ -1577,6 +1578,7 @@
     }
     persist();
     backupOpen = false;
+    backupImportText = ""; // 병합 끝나면 붙여넣었던 JSON 비워서, 다음에 열었을 때 예전 내용이 남아있지 않게 함
     render();
     const parts = [];
     if(toAdd.length) parts.push(`${toAdd.length}건 추가`);
@@ -2916,7 +2918,7 @@
         const startsHtml = b.continuesFromBefore ? `<span class="time-grid-h-block-extends" title="이전 시간대부터 이어지는 일정이에요">${escapeHtml(trueStartLabel)}◂</span>` : '';
         const extendsHtml = continues ? `<span class="time-grid-h-block-extends" title="계속 이어지는 일정이에요">▸${escapeHtml(trueEndLabel)}</span>` : '';
         const channelPrefix = b.channel ? `[${b.channel}] ` : '';
-        const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(timeLabel)}${deadlineSuffix}${continues ? ' (계속 이어짐)' : ''} ${channelPrefix}${escapeHtml(b.label)}${b.task.notes ? ' — ' + escapeHtml(b.task.notes) : ''}`;
+        const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(timeLabel)}${deadlineSuffix}${continues ? ' (계속 이어짐)' : ''} ${channelPrefix}${escapeHtml(b.label)}${b.task.notes ? '&#10;' + escapeHtml(b.task.notes).replace(/\n/g, '&#10;') : ''}`;
         // 세로형은 열 전체 폭(또는 레인만큼)을 쓰니까 채널명은 폭 걱정 없이 항상 같이 보여줌
         // 프로모션에 연결된 항목(마감 등)이나 마감리드타임 마커는 시간이 항목 상태에서 자동으로 나오는 거라
         // 드래그로 옮기는 게 의미가 없음 — 직접 만든 할일/미팅만 드래그로 옮기고 늘릴 수 있게 함
@@ -3208,11 +3210,11 @@
     // 초안(아직 journalTasks에 없는 상태)이면 지금이 처음 저장하는 순간이니 이제야 실제로 목록에 추가함
     if(floatingDetail && floatingDetail.type === 'memo' && floatingDetail.draft){
       journalTasks.push(floatingDetail.draft);
-      floatingDetail = { type:'memo', taskId: floatingDetail.taskId }; // 초안 꼬리표 떼고 진짜 항목으로 전환
     }
     persistJournalTasks();
     journalMemoDirty = false;
     journalMemoIsNew = false;
+    floatingDetail = null; // 저장하면 팝업 자동으로 닫힘
     showToast('저장했어요');
     render();
   }
@@ -5746,7 +5748,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         html += `
           <div class="hint" style="margin-bottom:12px;">Claude 아티팩트(대화창)나 파싱 스킬로 정리해둔 백업 JSON을 여기에 그대로 붙여넣으면, 기존 데이터는 그대로 두고 겹치지 않는 것만 병합돼요.</div>
           <div class="field">
-            <label>백업 JSON 붙여넣기</label>
+            <label>백업 JSON 붙여넣기 <span class="section-label-action" onclick="App.resetBackupImportText()" style="font-weight:400;">지우기</span></label>
             <textarea placeholder='{"items":[...],"journalEntries":{},"journalTasks":[...]}' style="min-height:160px;font-family:var(--mono);font-size:11.5px;" oninput="App.updateBackupImportText(this.value)">${escapeHtml(backupImportText)}</textarea>
           </div>
           <div class="modal-footer">
@@ -6562,6 +6564,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     restoreBackupSnapshot,
     deleteBackupSnapshot,
     updateBackupImportText,
+    resetBackupImportText,
     restoreBackup,
     openChannelRename,
     closeChannelRename,
