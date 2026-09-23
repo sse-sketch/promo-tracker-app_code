@@ -2842,8 +2842,8 @@
     const HOUR_PX_V = 34;
     const SPLIT_MIN = 14 * 60;
     const halves = [
-      { label: '오전', start: TIME_GRID_START_MIN, end: SPLIT_MIN },
-      { label: '오후', start: SPLIT_MIN, end: TIME_GRID_END_MIN }
+      { label: '07:00-14:00', start: TIME_GRID_START_MIN, end: SPLIT_MIN },
+      { label: '14:00-21:00', start: SPLIT_MIN, end: TIME_GRID_END_MIN }
     ];
     const nowMin = (jd === todayISO()) ? (new Date().getHours()*60 + new Date().getMinutes()) : null;
     const kindIconMap = { todo:'📌', issue:'👀', meeting:'🗣️', proposal:'💡', call:'📞', review:'📋' };
@@ -3078,6 +3078,14 @@
     evt.stopPropagation();
     const blockEl = evt.currentTarget.closest ? evt.currentTarget.closest('.time-grid-v-block') : evt.target.closest('.time-grid-v-block');
     if(!blockEl) return;
+    // 오전/오후 두 트랙 다 잡아둠 — 드래그 끝났을 때 커서가 반대쪽 트랙 위에 있으면 그쪽 기준으로 계산해서
+    // 오전<->오후 넘나드는 드래그도 되게 함
+    const wrap = blockEl.closest('.time-grid-v-wrap');
+    const tracks = wrap ? Array.from(wrap.querySelectorAll('.time-grid-v-track')).map(el => ({
+      rect: el.getBoundingClientRect(),
+      halfStart: parseFloat(el.dataset.halfStart),
+      totalMin: parseFloat(el.dataset.totalMin) || (parseFloat(blockEl.dataset.totalMin))
+    })) : [];
     blockDragState = {
       taskId, mode,
       moved: false,
@@ -3087,6 +3095,7 @@
       halfStartMin: parseFloat(blockEl.dataset.halfStart),
       totalMin: parseFloat(blockEl.dataset.totalMin),
       colHeight: parseFloat(blockEl.dataset.colHeight),
+      tracks,
       blockEl
     };
     document.addEventListener('mousemove', onBlockDragMove);
@@ -3114,10 +3123,25 @@
     blockJustDragged = true;
     const task = journalTasks.find(t => t.id === st.taskId);
     if(!task){ render(); return; }
-    const minPerPx = st.totalMin / st.colHeight;
+    // 드롭한 위치(커서의 x,y)가 어느 트랙 위인지 확인 — 반대쪽 트랙이면 그 트랙 기준으로 계산
+    let targetTrack = null;
+    for(const t of st.tracks){
+      if(evt.clientX >= t.rect.left && evt.clientX <= t.rect.right){ targetTrack = t; break; }
+    }
+    const useHalfStart = targetTrack ? targetTrack.halfStart : st.halfStartMin;
+    const useTotalMin = targetTrack ? targetTrack.totalMin : st.totalMin;
+    const useRectTop = targetTrack ? targetTrack.rect.top : null;
+    const minPerPx = useTotalMin / st.colHeight;
     if(st.mode === 'move'){
-      const dy = evt.clientY - st.startY;
-      let newStartMin = st.halfStartMin + (st.startTop + dy) * minPerPx;
+      let newStartMin;
+      if(targetTrack && useRectTop !== null){
+        // 반대쪽 트랙으로 넘어간 경우 — 그 트랙 안에서 커서의 세로 위치를 직접 시각으로 환산
+        const offsetY = evt.clientY - useRectTop;
+        newStartMin = useHalfStart + offsetY * minPerPx;
+      }else{
+        const dy = evt.clientY - st.startY;
+        newStartMin = st.halfStartMin + (st.startTop + dy) * minPerPx;
+      }
       newStartMin = Math.max(TIME_GRID_START_MIN, Math.min(TIME_GRID_END_MIN - 30, Math.round(newStartMin / 30) * 30));
       const oldStartMin = timeToMinutes(task.time);
       const oldEndMin = timeToMinutes(task.endTime);
