@@ -463,6 +463,8 @@
   .time-grid-week-col.is-holiday .time-grid-week-day-label{background:var(--urgent-soft);color:var(--urgent);font-weight:800;margin-top:-1px;}
   .time-grid-week-col.is-holiday .time-grid-v-track{background:rgba(175,74,65,0.06);}
   .time-grid-week-col.is-today .time-grid-week-day-label{color:var(--brand);font-weight:800;}
+  .time-grid-week-col:not(.is-today) .time-grid-week-block{opacity:0.68;}
+  .time-grid-week-col.is-today .time-grid-week-block{box-shadow:0 2px 6px -2px rgba(35,46,41,0.3);}
   .time-grid-week-day-label{text-align:center;font-size:11px;font-weight:700;color:var(--ink-soft);cursor:pointer;padding:5px 2px 4px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;height:52px;background:var(--surface-2);border-radius:8px 8px 0 0;}
   .time-grid-week-day-num{display:block;font-size:13px;}
   .time-grid-week-holiday-icon{font-size:10px;font-weight:700;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:keep-all;}
@@ -497,7 +499,7 @@
   .time-grid-v-block:hover{transform:translateY(-1px);box-shadow:0 5px 12px -3px rgba(35,46,41,0.26);z-index:3;}
   .time-grid-v-block.is-draggable{cursor:grab;}
   .time-grid-v-block.is-draggable:active{cursor:grabbing;}
-  .time-grid-v-block-resize{position:absolute;left:0;right:0;bottom:0;height:6px;cursor:ns-resize;}
+  .time-grid-v-block-resize{position:absolute;left:0;right:0;bottom:-2px;height:10px;cursor:ns-resize;z-index:3;}
   .time-grid-v-block-resize:hover{background:rgba(0,0,0,0.08);}
   .time-grid-v-block.is-deadline-marker{border-style:dashed;border-width:1px;border-left-width:3px;box-shadow:none;}
   .time-grid-v-block.is-done{opacity:0.55;box-shadow:none;}
@@ -3168,7 +3170,7 @@
   function onBlockDragMove(evt){
     if(!blockDragState) return;
     const dy = evt.clientY - blockDragState.startY;
-    if(Math.abs(dy) > 3) blockDragState.moved = true;
+    if(Math.abs(dy) > 8) blockDragState.moved = true;
     if(!blockDragState.moved) return;
     if(blockDragState.mode === 'move'){
       blockDragState.blockEl.style.top = (blockDragState.startTop + dy) + 'px';
@@ -6428,7 +6430,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                   <input type="date" value="${escapeHtml(memoTask.recurrence.until||'')}" oninput="App.updateJournalTaskRecurUntil('${memoTask.id}', this.value)" />
                 </div>
               ` : ''}
-              <input type="text" class="journal-memo-title-input" value="${escapeHtml(memoTask.text)}" placeholder="내용" oninput="App.updateJournalTaskText('${memoTask.id}', this.value)" autofocus />
+              <input type="text" class="journal-memo-title-input" value="${escapeHtml(memoTask.text)}" placeholder="내용" oninput="App.updateJournalTaskText('${memoTask.id}', this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();App.saveJournalMemoNow();}" autofocus />
             ` : `
               <div class="setup-preview-title" style="margin-bottom:10px;">📝 ${escapeHtml(memoTask.text || '(내용 없음)')}</div>
             `}
