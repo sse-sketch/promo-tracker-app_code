@@ -479,6 +479,7 @@
   .time-grid-v-hour-row{border-top:1px dashed var(--line);position:relative;}
   .time-grid-v-hour-label{position:absolute;top:-7px;left:0;font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);}
   .time-grid-v-track{flex:1;position:relative;border-radius:6px;transition:background .1s ease;}
+  .time-grid-hover-ghost{position:absolute;left:2px;right:2px;display:none;background:var(--brand-soft);border:1.5px dashed var(--brand);border-radius:5px;pointer-events:none;z-index:1;}
   .time-grid-v-track:hover{background:rgba(122,110,90,0.05);}
   .time-grid-v-lunch{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,rgba(136,135,128,0.10),rgba(136,135,128,0.10) 6px,rgba(136,135,128,0.04) 6px,rgba(136,135,128,0.04) 12px);border-top:1px dashed var(--ink-faint);border-bottom:1px dashed var(--ink-faint);z-index:0;}
   .time-grid-v-offhours{position:absolute;left:0;right:0;background:rgba(120,115,105,0.06);z-index:0;pointer-events:none;}
@@ -2990,7 +2991,7 @@
         <div class="time-grid-v-col ${dimmed?'is-holiday':''}">
           <div style="display:flex;gap:8px;">
             <div class="time-grid-v-hours" style="height:${colHeight}px;">${hourLabelsHtml}</div>
-            <div class="time-grid-v-track" data-date="${jd}" data-half-start="${half.start}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="height:${colHeight}px;cursor:pointer;" title="빈 곳을 클릭하면 그 시각으로 할일이 바로 만들어져요" onclick="App.handleTimeGridTrackClick(event, '${jd}', ${half.start}, ${totalMin}, ${colHeight})">${offHoursHtml}${leaveBandHtml}${lunchHtml}${nowLineHtml}${eventsHtml}</div>
+            <div class="time-grid-v-track" data-date="${jd}" data-half-start="${half.start}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="height:${colHeight}px;cursor:pointer;" title="빈 곳을 클릭하면 그 시각으로 할일이 바로 만들어져요" onclick="App.handleTimeGridTrackClick(event, '${jd}', ${half.start}, ${totalMin}, ${colHeight})" onmousemove="App.handleTimeGridTrackHover(event, ${half.start}, ${totalMin}, ${colHeight})" onmouseleave="App.handleTimeGridTrackHoverLeave(event)">${offHoursHtml}${leaveBandHtml}${lunchHtml}${nowLineHtml}${eventsHtml}</div>
           </div>
         </div>
       `;
@@ -3065,7 +3066,7 @@
       dayColsHtml.push(`
         <div class="time-grid-week-col ${isToday?'is-today':''} ${isWeekendCol?'is-weekend':''} ${isHolidayCol?'is-holiday':''}">
           <div class="time-grid-week-day-label ${dowLabelClass}" style="height:${dayLabelHeight}px;" onclick="App.journalGoToDate('${dateStr}')" title="${isHolidayCol ? escapeHtml(holidayColInfo.label) + ' — ' : ''}이 날 일별로 보기">${dowNames[d.getDay()]}<span class="time-grid-week-day-num">${d.getDate()}</span>${isHolidayCol ? `<span class="time-grid-week-holiday-icon">${escapeHtml(holidayColInfo.label)}</span>` : ''}</div>
-          <div class="time-grid-v-track" data-date="${dateStr}" data-half-start="${TIME_GRID_START_MIN}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="height:${colHeight}px;" onclick="App.handleTimeGridTrackClick(event, '${dateStr}', ${TIME_GRID_START_MIN}, ${totalMin}, ${colHeight})">${offHoursHtml}${lunchHtml}${nowLineHtml}${eventsHtml}</div>
+          <div class="time-grid-v-track" data-date="${dateStr}" data-half-start="${TIME_GRID_START_MIN}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="height:${colHeight}px;cursor:pointer;" onclick="App.handleTimeGridTrackClick(event, '${dateStr}', ${TIME_GRID_START_MIN}, ${totalMin}, ${colHeight})" onmousemove="App.handleTimeGridTrackHover(event, ${TIME_GRID_START_MIN}, ${totalMin}, ${colHeight})" onmouseleave="App.handleTimeGridTrackHoverLeave(event)">${offHoursHtml}${lunchHtml}${nowLineHtml}${eventsHtml}</div>
         </div>
       `);
     }
@@ -3244,6 +3245,33 @@
     min = Math.round(min / 30) * 30;
     const timeStr = `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`;
     addJournalTaskAtTime(jd, timeStr);
+  }
+  // 빈 곳 위에서 마우스를 움직이면, 클릭했을 때 실제로 잡힐 30분 칸을 미리 하이라이트로 보여줌 —
+  // render() 없이 DOM만 직접 바꿔서(가벼움) 렌더 한 번 없이 부드럽게 따라다니게 함
+  function handleTimeGridTrackHover(evt, halfStartMin, totalMin, colHeight){
+    if(evt.target.closest('.time-grid-v-block')){ handleTimeGridTrackHoverLeave(evt); return; }
+    const track = evt.currentTarget;
+    const rect = track.getBoundingClientRect();
+    const offsetY = evt.clientY - rect.top;
+    const ratio = Math.max(0, Math.min(1, offsetY / colHeight));
+    let min = halfStartMin + ratio * totalMin;
+    min = Math.round(min / 30) * 30;
+    const slotTopPx = ((min - halfStartMin) / totalMin) * colHeight;
+    const slotHeightPx = (30 / totalMin) * colHeight;
+    let ghost = track.querySelector('.time-grid-hover-ghost');
+    if(!ghost){
+      ghost = document.createElement('div');
+      ghost.className = 'time-grid-hover-ghost';
+      track.appendChild(ghost);
+    }
+    ghost.style.top = slotTopPx + 'px';
+    ghost.style.height = slotHeightPx + 'px';
+    ghost.style.display = 'block';
+  }
+  function handleTimeGridTrackHoverLeave(evt){
+    const track = evt.currentTarget || evt;
+    const ghost = track.querySelector && track.querySelector('.time-grid-hover-ghost');
+    if(ghost) ghost.style.display = 'none';
   }
   function addJournalTask(category){
     const id = 'jt_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
@@ -6589,6 +6617,8 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     addJournalTask,
     addJournalTaskAtTime,
     handleTimeGridTrackClick,
+    handleTimeGridTrackHover,
+    handleTimeGridTrackHoverLeave,
     startBlockDrag,
     wasBlockDragged,
     updateJournalTaskText,
