@@ -479,9 +479,9 @@
   .time-grid-v-hour-row{border-top:1px dashed var(--line);position:relative;}
   .time-grid-v-hour-label{position:absolute;top:-7px;left:0;font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);}
   .time-grid-v-track{flex:1;position:relative;border-radius:6px;transition:background .1s ease;}
-  .time-grid-hover-ghost{position:absolute;left:2px;right:2px;display:none;background:var(--brand-soft);border:1.5px dashed var(--brand);border-radius:5px;pointer-events:none;z-index:1;}
+  .time-grid-hover-ghost{position:absolute;left:2px;right:2px;display:none;background:rgba(161,90,103,0.12);border-radius:5px;pointer-events:none;z-index:0;}
   .time-grid-v-track:hover{background:rgba(122,110,90,0.05);}
-  .time-grid-v-lunch{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,rgba(136,135,128,0.10),rgba(136,135,128,0.10) 6px,rgba(136,135,128,0.04) 6px,rgba(136,135,128,0.04) 12px);border-top:1px dashed var(--ink-faint);border-bottom:1px dashed var(--ink-faint);z-index:0;}
+  .time-grid-v-lunch{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,rgba(136,135,128,0.16),rgba(136,135,128,0.16) 6px,rgba(136,135,128,0.06) 6px,rgba(136,135,128,0.06) 12px);border-top:1px dashed var(--ink-faint);border-bottom:1px dashed var(--ink-faint);z-index:5;pointer-events:none;}
   .time-grid-v-offhours{position:absolute;left:0;right:0;background:rgba(120,115,105,0.06);z-index:0;pointer-events:none;}
   .time-grid-v-leaveband{background:rgba(201,162,39,0.14);border-top:1px dashed #C9A227;border-bottom:1px dashed #C9A227;}
   .time-grid-v-leaveband .time-grid-v-lunch-label{color:#96650F;font-weight:700;}
@@ -492,7 +492,7 @@
     position:absolute;border-radius:7px;padding:5px 8px;overflow:hidden;cursor:pointer;
     font-size:10.5px;line-height:1.25;box-sizing:border-box;border-left:3px solid transparent;
     box-shadow:0 2px 5px -2px rgba(35,46,41,0.16);transition:transform .12s ease, box-shadow .12s ease;
-    display:flex;flex-direction:column;justify-content:flex-start;gap:2px;
+    display:flex;flex-direction:column;justify-content:flex-start;gap:2px;z-index:2;
   }
   .time-grid-v-block:hover{transform:translateY(-1px);box-shadow:0 5px 12px -3px rgba(35,46,41,0.26);z-index:3;}
   .time-grid-v-block.is-draggable{cursor:grab;}
@@ -2625,10 +2625,9 @@
     }
     if(!task.recurrence){
       if(task.createdDate && jd < task.createdDate) return false; // 지정한 날짜 되기 전엔 안 보임
-      // 미팅/컨택처럼 "특정 시각에 실제로 일어나는 일"만 그 날 하루로 끝냄. 할일/제안/검토처럼
-      // 시작 시각을 참고용으로만 넣어둔 실제 작업거리는, 다른 할일과 똑같이 완료 전까지 계속 이월돼야 함
-      // (전에 이걸 시각 있는 항목 전부에 적용했다가, 안 끝난 작업까지 통째로 안 보이게 됐던 문제가 있었음)
-      if(task.time && (task.taskType === 'meeting' || task.taskType === 'call')) return jd === task.createdDate;
+      // 시각이 지정된 할일(할일/미팅/제안/컨택/검토 다 포함)은 "그날 하루"만 뜸 — 안 끝났으면 이월되는 대신
+      // 드래그로 다른 날에 직접 옮기면 됨. 시각이 아예 없는 항목(체크리스트성 할일)만 계속 이월됨
+      if(task.time) return jd === task.createdDate;
       // 주말엔 이월 안 시킴 — 안 끝난 평일 할일이 토/일까지 계속 떠 있을 이유가 없음(주말엔 원래 일 안 하니까).
       // 다만 애초에 토/일에 만든 항목이면(그날 하려고 넣은 거니까) 그날은 그대로 보여줌
       const dow = new Date(jd + 'T00:00:00').getDay();
@@ -6378,8 +6377,8 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         const memoDdayInfo = memoLinkedItem ? journalLinkedDdayInfo(memoLinkedItem, memoTask.linkedType) : null;
         const memoRecurType = memoTask.recurrence ? memoTask.recurrence.type : 'none';
         html += `
-          <div class="floating-backdrop" onclick="App.closeFloatingDetail()"></div>
-          <div class="floating-panel">
+          <div class="overlay" onclick="if(event.target===this) App.closeFloatingDetail();">
+          <div class="modal" style="position:relative;max-width:420px;">
             <div class="floating-panel-close" onclick="App.closeFloatingDetail()">✕</div>
             ${!memoTask.linkedItemId ? `
               <div class="journal-kind-picker">
@@ -6451,6 +6450,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
               <button type="button" class="btn ${journalMemoDirty ? 'btn-primary' : 'btn-ghost'}" style="flex:1;" onclick="App.saveJournalMemoNow()">${journalMemoDirty ? '● 저장' : '저장'}</button>
             </div>
             <button type="button" class="btn-text-danger" style="width:100%;margin-top:8px;" onclick="App.deleteJournalTaskFromMemo()">삭제</button>
+          </div>
           </div>
         `;
       }else{
