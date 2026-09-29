@@ -463,12 +463,14 @@
   .time-grid-week-col.is-holiday .time-grid-week-day-label{background:var(--urgent-soft);color:var(--urgent);font-weight:800;margin-top:-1px;}
   .time-grid-week-col.is-holiday .time-grid-v-track{background:rgba(175,74,65,0.06);}
   .time-grid-week-col.is-today .time-grid-week-day-label{color:var(--brand);font-weight:800;}
-  .time-grid-week-col:not(.is-today) .time-grid-week-block{opacity:0.68;}
+  .time-grid-week-col:not(.is-today) .time-grid-week-block{opacity:0.45;}
+  .time-grid-week-block.is-past{opacity:0.4;}
   .time-grid-week-col.is-today .time-grid-week-block{box-shadow:0 2px 6px -2px rgba(35,46,41,0.3);}
   .time-grid-week-day-label{text-align:center;font-size:11px;font-weight:700;color:var(--ink-soft);cursor:pointer;padding:5px 2px 4px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;height:52px;background:var(--surface-2);border-radius:8px 8px 0 0;}
   .time-grid-week-day-num{display:block;font-size:13px;}
   .time-grid-week-holiday-icon{font-size:10px;font-weight:700;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:keep-all;}
-  .time-grid-week-block{position:absolute;border-radius:4px;overflow:hidden;cursor:pointer;font-size:9.5px;padding:2px 4px;border-left:2px solid transparent;box-shadow:0 1px 3px -1px rgba(35,46,41,0.2);line-height:1.25;box-sizing:border-box;}
+  .time-grid-week-block{position:absolute;border-radius:4px;overflow:hidden;cursor:pointer;font-size:10px;padding:2px 4px;border-left:2px solid transparent;box-shadow:0 1px 3px -1px rgba(35,46,41,0.2);line-height:1.25;box-sizing:border-box;}
+  .time-grid-week-block-icon{font-size:12px;line-height:1;}
   .time-grid-week-block-title{font-weight:700;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
   .time-grid-week-block-time{opacity:0.75;font-size:8.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .time-grid-week-day-label.is-saturday{color:#3B6BC9;}
@@ -2992,7 +2994,7 @@
         <div class="time-grid-v-col ${dimmed?'is-holiday':''}">
           <div style="display:flex;gap:8px;">
             <div class="time-grid-v-hours" style="height:${colHeight}px;">${hourLabelsHtml}</div>
-            <div class="time-grid-v-track" data-date="${jd}" data-half-start="${half.start}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="height:${colHeight}px;cursor:pointer;" title="빈 곳을 클릭하면 그 시각으로 할일이 바로 만들어져요" onclick="App.handleTimeGridTrackClick(event, '${jd}', ${half.start}, ${totalMin}, ${colHeight})" onmousemove="App.handleTimeGridTrackHover(event, ${half.start}, ${totalMin}, ${colHeight})" onmouseleave="App.handleTimeGridTrackHoverLeave(event)">${offHoursHtml}${leaveBandHtml}${lunchHtml}${nowLineHtml}${eventsHtml}</div>
+            <div class="time-grid-v-track" data-date="${jd}" data-half-start="${half.start}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="height:${colHeight}px;">${offHoursHtml}${leaveBandHtml}${lunchHtml}${nowLineHtml}${eventsHtml}</div>
           </div>
         </div>
       `;
@@ -3002,7 +3004,10 @@
     const dimPM = !!(holidayInfo2 && ['annual','public','half_pm'].includes(holidayInfo2.type));
     return `
       <div class="journal-section">
-        <div class="journal-section-label">🕐 오늘 시간표 ${infoTip('할일에 시작~종료 시각을 넣으면 여기에 길이대로 표시돼요. 겹치는 시간대는 옆으로 나란히 배치되고, 오전/오후 두 열로 나눠서 보여줘요.', 220)}</div>
+        <div class="journal-section-label" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>🕐 오늘 시간표 ${infoTip('할일에 시작~종료 시각을 넣으면 여기에 길이대로 표시돼요. 겹치는 시간대는 옆으로 나란히 배치되고, 오전/오후 두 열로 나눠서 보여줘요. 블록을 드래그하면 시간을 옮기거나 길이를 조절할 수 있어요.', 260)}</span>
+          <button type="button" class="btn btn-ghost" style="padding:5px 10px;font-size:11.5px;" onclick="App.addJournalTaskAtTime('${jd}', '')">+ 일정 추가</button>
+        </div>
         <div class="time-grid-v-wrap">
           ${renderHalf(halves[0], dimAM)}
           ${renderHalf(halves[1], dimPM)}
@@ -3053,8 +3058,9 @@
           : `${normalizeTime(b.task.time)}${b.task.endTime ? '~'+normalizeTime(b.task.endTime) : ''}`;
         const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(b.label)} (${timeLabel})`;
         const weekDraggable = !b.isLinked && !b.isDeadlineMarker;
-        return `<div class="time-grid-week-block ${kindClass} ${b.isDone?'is-done':''} ${weekDraggable?'is-draggable':''}" data-half-start="${TIME_GRID_START_MIN}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${heightPx-2}px;left:${leftPct}%;width:calc(${widthPct}% - 2px);" ${weekDraggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
-          <div class="time-grid-week-block-title">${icon} ${escapeHtml(b.label)}</div>
+        const isPast = isToday && b.endMin < nowMinNow;
+        return `<div class="time-grid-week-block ${kindClass} ${b.isDone?'is-done':''} ${weekDraggable?'is-draggable':''} ${isPast?'is-past':''}" data-half-start="${TIME_GRID_START_MIN}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${heightPx-2}px;left:${leftPct}%;width:calc(${widthPct}% - 2px);" ${weekDraggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
+          <div class="time-grid-week-block-title"><span class="time-grid-week-block-icon">${icon}</span> ${escapeHtml(b.label)}</div>
           <div class="time-grid-week-block-time">${escapeHtml(timeLabel)}</div>
           ${weekDraggable ? `<div class="time-grid-v-block-resize" onmousedown="App.startBlockDrag(event, '${b.task.id}', 'resize')" title="드래그해서 길이 조절"></div>` : ''}
         </div>`;
@@ -3067,7 +3073,7 @@
       dayColsHtml.push(`
         <div class="time-grid-week-col ${isToday?'is-today':''} ${isWeekendCol?'is-weekend':''} ${isHolidayCol?'is-holiday':''}">
           <div class="time-grid-week-day-label ${dowLabelClass}" style="height:${dayLabelHeight}px;" onclick="App.journalGoToDate('${dateStr}')" title="${isHolidayCol ? escapeHtml(holidayColInfo.label) + ' — ' : ''}이 날 일별로 보기">${dowNames[d.getDay()]}<span class="time-grid-week-day-num">${d.getDate()}</span>${isHolidayCol ? `<span class="time-grid-week-holiday-icon">${escapeHtml(holidayColInfo.label)}</span>` : ''}</div>
-          <div class="time-grid-v-track" data-date="${dateStr}" data-half-start="${TIME_GRID_START_MIN}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="height:${colHeight}px;cursor:pointer;" onclick="App.handleTimeGridTrackClick(event, '${dateStr}', ${TIME_GRID_START_MIN}, ${totalMin}, ${colHeight})" onmousemove="App.handleTimeGridTrackHover(event, ${TIME_GRID_START_MIN}, ${totalMin}, ${colHeight})" onmouseleave="App.handleTimeGridTrackHoverLeave(event)">${offHoursHtml}${lunchHtml}${nowLineHtml}${eventsHtml}</div>
+          <div class="time-grid-v-track" data-date="${dateStr}" data-half-start="${TIME_GRID_START_MIN}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="height:${colHeight}px;">${offHoursHtml}${lunchHtml}${nowLineHtml}${eventsHtml}</div>
         </div>
       `);
     }
@@ -5524,7 +5530,10 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
           <button class="icon-btn" onclick="App.journalWeekNext()">›</button>
           ${journalDatePickerOpen ? renderMiniDatePicker() : ''}
         </div>`;
-        html += `<div class="journal-done-toggle" style="margin-bottom:8px;" onclick="App.toggleJournalWeekShowWeekends()">${journalWeekShowWeekends ? '▾ 주말 숨기기' : '▸ 주말도 보기'}</div>`;
+        html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span class="journal-done-toggle" style="margin-bottom:0;" onclick="App.toggleJournalWeekShowWeekends()">${journalWeekShowWeekends ? '▾ 주말 숨기기' : '▸ 주말도 보기'}</span>
+          <button type="button" class="btn btn-ghost" style="padding:5px 10px;font-size:11.5px;" onclick="App.addJournalTaskAtTime('${todayISO()}', '')">+ 일정 추가</button>
+        </div>`;
         html += renderWeekTimeGrid(journalWeekAnchor);
 
         html += `<div class="journal-done-toggle" style="margin-top:14px;" onclick="App.toggleJournalWeekListExpanded()">${journalWeekListExpanded?'▾':'▸'} 이번주 목록으로 보기</div>`;
