@@ -6500,7 +6500,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                 <span class="star-toggle ${memoTask.starred?'is-starred':''}" style="cursor:pointer;flex-shrink:0;" onclick="App.toggleJournalTaskStar('${memoTask.id}')" title="중요 표시">${memoTask.starred?'★':'☆'}</span>
                 <input type="text" class="journal-memo-title-input" style="margin-bottom:0;flex:1;" value="${escapeHtml(memoTask.text)}" placeholder="내용" oninput="App.updateJournalTaskText('${memoTask.id}', this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();App.saveJournalMemoNow();}" autofocus />
               </div>
-              <div style="display:flex;gap:10px;align-items:flex-end;">
+              <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px;">
                 <div class="journal-memo-due" style="flex:0 0 150px;margin-bottom:0;">
                   <label>날짜</label>
                   <input type="date" value="${escapeHtml(memoTask.createdDate||journalDate)}" onchange="App.updateJournalTaskCreatedDate('${memoTask.id}', this.value)" />
