@@ -5942,22 +5942,24 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
               💡 텍스트만 붙여넣으면 자동으로 정리해주는 기능은 <b>Claude 아티팩트(대화창 안)</b>에서 쓸 수 있어요. 거기서 정리한 다음 "가져오기" 탭으로 붙여넣으시면 돼요.
             </div>
           ` : ''}
-          <div class="field">
-            <label>채널</label>
-            <select id="f_channel" onchange="if(this.value==='__add_new__'){App.openNewChannelPrompt('form');}else{App.updateFieldAndRender('channel', this.value);}">
-              <option value="" ${!f.channel?'selected':''}>채널 선택</option>
-              ${channelSuggestions.map(c => `<option value="${escapeHtml(c)}" ${f.channel===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
-              ${f.channel && !channelSuggestions.includes(f.channel) ? `<option value="${escapeHtml(f.channel)}" selected>${escapeHtml(f.channel)} (미등록)</option>` : ''}
-              <option value="__add_new__">+ 새 채널 추가...</option>
-            </select>
+          <div style="display:flex;gap:10px;">
+            <div class="field" style="flex:1;">
+              <label>채널</label>
+              <select id="f_channel" onchange="if(this.value==='__add_new__'){App.openNewChannelPrompt('form');}else{App.updateFieldAndRender('channel', this.value);}">
+                <option value="" ${!f.channel?'selected':''}>채널 선택</option>
+                ${channelSuggestions.map(c => `<option value="${escapeHtml(c)}" ${f.channel===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
+                ${f.channel && !channelSuggestions.includes(f.channel) ? `<option value="${escapeHtml(f.channel)}" selected>${escapeHtml(f.channel)} (미등록)</option>` : ''}
+                <option value="__add_new__">+ 새 채널 추가...</option>
+              </select>
+            </div>
+            <div class="field" style="flex:1;">
+              <label>프로모션 기간</label>
+              <input type="text" value="${escapeHtml(f.period)}" placeholder="예: 8/20 ~ 8/31" oninput="App.updateField('period', this.value)" />
+            </div>
           </div>
           <div class="field">
             <label>제목 <span style="font-weight:400;color:var(--ink-faint);">(프로모션명)</span> <span class="star-toggle ${f.starred?'is-starred':''}" style="cursor:pointer;" onclick="App.updateFieldAndRender('starred', ${f.starred ? 'false' : 'true'})" title="중요 표시">${f.starred?'★':'☆'}</span></label>
             <input type="text" value="${escapeHtml(f.title||'')}" placeholder="예: [E4CZZ] 추석_얼리버드 1주차" oninput="App.updateField('title', this.value)" />
-          </div>
-          <div class="field">
-            <label>프로모션 기간</label>
-            <input type="text" value="${escapeHtml(f.period)}" placeholder="예: 8/20 ~ 8/31" oninput="App.updateField('period', this.value)" />
           </div>
           <div style="display:flex;gap:10px;">
             <div class="field" style="flex:1;">
@@ -6444,19 +6446,22 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                 <span class="journal-type-chip ${memoTask.category==='todo'&&memoTask.taskType==='review'?'journal-type-chip-active':''}" onclick="App.setJournalTaskKind('${memoTask.id}', 'review')">📋 검토</span>
                 <span class="journal-type-chip ${memoTask.category==='issue'?'journal-type-chip-active journal-type-chip-issue':''}" onclick="App.setJournalTaskKind('${memoTask.id}', 'issue')">👀 팔로우업</span>
               </div>
-              <div class="journal-memo-due">
-                <label>날짜</label>
-                <input type="date" value="${escapeHtml(memoTask.createdDate||journalDate)}" onchange="App.updateJournalTaskCreatedDate('${memoTask.id}', this.value)" />
+              <input type="text" class="journal-memo-title-input" value="${escapeHtml(memoTask.text)}" placeholder="내용" oninput="App.updateJournalTaskText('${memoTask.id}', this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();App.saveJournalMemoNow();}" autofocus />
+              <div style="display:flex;gap:10px;align-items:flex-end;">
+                <div class="journal-memo-due" style="flex:1;margin-bottom:0;">
+                  <label>날짜</label>
+                  <input type="date" value="${escapeHtml(memoTask.createdDate||journalDate)}" onchange="App.updateJournalTaskCreatedDate('${memoTask.id}', this.value)" />
+                </div>
+                ${(!memoTask.recurrence && !journalMemoIsNew) ? `
+                  <label class="journal-memo-done-row" style="flex:1;margin-bottom:0;padding-bottom:8px;">
+                    <input type="checkbox" ${memoTask.done?'checked':''} onchange="App.toggleJournalTaskDone('${memoTask.id}', '${journalDate}')" />
+                    완료 처리
+                  </label>
+                ` : '<div style="flex:1;"></div>'}
               </div>
               <button type="button" class="journal-memo-star-btn ${memoTask.starred?'is-starred':''}" onclick="App.toggleJournalTaskStar('${memoTask.id}')">
                 <span class="journal-memo-star-icon">${memoTask.starred?'★':'☆'}</span> ${memoTask.starred?'중요 표시됨':'중요 표시하기'}
               </button>
-              ${(!memoTask.recurrence && !journalMemoIsNew) ? `
-                <label class="journal-memo-done-row">
-                  <input type="checkbox" ${memoTask.done?'checked':''} onchange="App.toggleJournalTaskDone('${memoTask.id}', '${journalDate}')" />
-                  완료 처리
-                </label>
-              ` : ''}
               <div class="journal-memo-edit-row">
                 <select class="journal-time-input" onchange="App.updateJournalTaskTime('${memoTask.id}', this.value)" title="시작 시각">${timeSelectOptions(memoTask.time)}</select>
                 <span style="color:var(--ink-faint);">~</span>
@@ -6483,7 +6488,6 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                   <input type="date" value="${escapeHtml(memoTask.recurrence.until||'')}" oninput="App.updateJournalTaskRecurUntil('${memoTask.id}', this.value)" />
                 </div>
               ` : ''}
-              <input type="text" class="journal-memo-title-input" value="${escapeHtml(memoTask.text)}" placeholder="내용" oninput="App.updateJournalTaskText('${memoTask.id}', this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();App.saveJournalMemoNow();}" autofocus />
             ` : `
               <div class="setup-preview-title" style="margin-bottom:10px;">📝 ${escapeHtml(memoTask.text || '(내용 없음)')}</div>
             `}
