@@ -608,7 +608,8 @@
   .setup-task-check input{width:16px;height:16px;accent-color:var(--warn);cursor:pointer;flex-shrink:0;}
   .setup-task-check.is-done span{text-decoration:line-through;color:var(--ink-faint);}
   .setup-task-label{flex:1;min-width:0;}
-  .setup-task-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+  .setup-task-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:4px 6px;border-radius:8px;cursor:pointer;border:1.5px solid transparent;}
+  .setup-task-row.is-selected{background:var(--urgent-soft);border-color:var(--urgent);}
   .setup-task-row input[type=checkbox]{width:16px;height:16px;accent-color:var(--warn);cursor:pointer;flex-shrink:0;}
   .setup-task-row input[type=text]{flex:1;}
   .setup-task-remove{cursor:pointer;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.08);
@@ -3669,13 +3670,18 @@
     modalState.detailsExpanded = !modalState.detailsExpanded;
     render();
   }
+  function toggleHistoryExpanded(){
+    if(!modalState) return;
+    modalState.historyExpanded = !modalState.historyExpanded;
+    render();
+  }
   function openEditModal(id){
     const item = items.find(i=>i.id===id);
     if(!item) return;
     modalState = {
       mode:'edit', tab:'manual', editId:id,
       form:{channel:item.channel, title:item.title||'', period:item.period, content:item.content, deadline:item.deadline, deadlineTime:item.deadlineTime||'', status:item.status||'pending', notes:item.notes||'', coupon:item.coupon||'', needsRecheck:!!item.needsRecheck, setupTasks:(item.setupTasks||[]).map(t=>({id:t.id, label:t.label, done:!!t.done})), setupType:item.setupType||'', setupDeadline:item.setupDeadline||'', selection: item.selection || (item.status==='submitted' ? 'selected' : 'pending'), assignee:item.assignee||'', starred:!!item.starred},
-      pasteText:'', pastedImages:[], parsing:false, parseError:'', detailsExpanded:true
+      pasteText:'', pastedImages:[], parsing:false, parseError:'', detailsExpanded:false
     };
     render();
   }
@@ -5776,7 +5782,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       html += `
         <div class="overlay" onclick="if(event.target===this) App.closeModal()">
           <div class="modal">
-            <h2 class="modal-title">${modalState.mode==='add' ? (modalState.tab==='review' ? '추출된 내용 확인' : '새 항목 등록') : '공지 수정'}</h2>
+            <h2 class="modal-title">${modalState.mode==='add' ? (modalState.tab==='review' ? '추출된 내용 확인' : '새 항목 등록') : '프로모션 수정'}</h2>
       `;
       if(modalState.mode === 'add' && modalState.tab !== 'review'){
         html += `
@@ -6032,11 +6038,10 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
             ${(f.setupTasks||[]).length ? `
               <div class="setup-task-list">
                 ${f.setupTasks.map((t, idx) => `
-                  <div class="setup-task-row">
-                    <input type="checkbox" class="setup-task-bulk-select" ${(modalState.setupTaskSelected||[]).includes(idx)?'checked':''} onchange="App.toggleSetupTaskSelect(${idx})" title="삭제할 항목으로 선택" />
-                    <input type="checkbox" ${t.done?'checked':''} onchange="App.updateSetupTaskField(${idx}, 'done', this.checked)" title="완료 표시" />
-                    <input type="text" value="${escapeHtml(t.label)}" placeholder="예: 상세페이지 등록" oninput="App.updateSetupTaskField(${idx}, 'label', this.value)" />
-                    <span class="setup-task-remove" onclick="App.removeSetupTaskRow(${idx})">✕</span>
+                  <div class="setup-task-row ${(modalState.setupTaskSelected||[]).includes(idx)?'is-selected':''}" onclick="App.toggleSetupTaskSelect(${idx})" title="눌러서 삭제할 항목으로 선택">
+                    <input type="checkbox" ${t.done?'checked':''} onclick="event.stopPropagation();" onchange="App.updateSetupTaskField(${idx}, 'done', this.checked)" title="완료 표시" />
+                    <input type="text" value="${escapeHtml(t.label)}" placeholder="예: 상세페이지 등록" onclick="event.stopPropagation();" oninput="App.updateSetupTaskField(${idx}, 'label', this.value)" />
+                    <span class="setup-task-remove" onclick="event.stopPropagation();App.removeSetupTaskRow(${idx})">✕</span>
                   </div>
                 `).join('')}
               </div>
@@ -6050,8 +6055,9 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
           ` : ''}
           ${modalState.mode==='edit' && Array.isArray(items.find(i=>i.id===modalState.editId)?.history) && items.find(i=>i.id===modalState.editId).history.length ? `
           <div class="field">
-            <label>📜 변경 이력</label>
-            <div class="history-log">
+            <div class="journal-done-toggle" style="margin-bottom:0;" onclick="App.toggleHistoryExpanded()">${modalState.historyExpanded?'▾':'▸'} 📜 변경 이력 ${items.find(i=>i.id===modalState.editId).history.length}건</div>
+            ${modalState.historyExpanded ? `
+            <div class="history-log" style="margin-top:8px;">
               ${items.find(i=>i.id===modalState.editId).history.slice().reverse().map(h => `
                 <div class="history-entry">
                   <span class="history-date">${escapeHtml(h.date)}</span>
@@ -6059,6 +6065,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                 </div>
               `).join('')}
             </div>
+            ` : ''}
           </div>
           ` : ''}
           ${modalState.parseError ? `<div class="parse-error">${escapeHtml(modalState.parseError)}</div>` : ''}
@@ -6568,6 +6575,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
   window.App = {
     openAdd: openAddModal,
     toggleAddFormDetails,
+    toggleHistoryExpanded,
     openEdit: openEditModal,
     closeModal,
     deleteItem,
