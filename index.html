@@ -5952,7 +5952,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
             </select>
           </div>
           <div class="field">
-            <label>제목 <span style="font-weight:400;color:var(--ink-faint);">(프로모션명)</span></label>
+            <label>제목 <span style="font-weight:400;color:var(--ink-faint);">(프로모션명)</span> <span class="star-toggle ${f.starred?'is-starred':''}" style="cursor:pointer;" onclick="App.updateFieldAndRender('starred', ${f.starred ? 'false' : 'true'})" title="중요 표시">${f.starred?'★':'☆'}</span></label>
             <input type="text" value="${escapeHtml(f.title||'')}" placeholder="예: [E4CZZ] 추석_얼리버드 1주차" oninput="App.updateField('title', this.value)" />
           </div>
           <div class="field">
@@ -5994,9 +5994,6 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
               ⚠️ 재확인 필요 (TBD, 특가 미확정 등)
             </label>
           </div>
-          <button type="button" class="journal-memo-star-btn ${f.starred?'is-starred':''}" onclick="App.updateFieldAndRender('starred', ${f.starred ? 'false' : 'true'})">
-            <span class="journal-memo-star-icon">${f.starred?'★':'☆'}</span> ${f.starred?'중요 표시됨':'중요 표시하기'}
-          </button>
           <div class="journal-done-toggle" style="margin:4px 0 14px;" onclick="App.toggleAddFormDetails()">${modalState.detailsExpanded?'▾':'▸'} 세부 정보 ${modalState.detailsExpanded?'숨기기':'더보기'} <span style="font-weight:400;color:var(--ink-faint);">(내용·담당자·쿠폰·비고·세팅)</span></div>
           ${modalState.detailsExpanded ? `
           <div class="field">
