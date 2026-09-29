@@ -2575,6 +2575,7 @@
     floatingDetail = null;
     journalDatePickerOpen = false;
     if(mode !== 'day'){ journalSelectMode = false; journalSelectedIds.clear(); }
+    if(mode === 'week'){ journalWeekAnchor = calcWeekStart(new Date(journalDate + 'T00:00:00')); } // 보고있던 날짜가 있는 주로 맞춰줌
     render();
   }
   function journalCalPrev(){ journalCalendarMonth = new Date(journalCalendarMonth.getFullYear(), journalCalendarMonth.getMonth()-1, 1); render(); }
@@ -3147,7 +3148,7 @@
   function startBlockDrag(evt, taskId, mode){
     evt.preventDefault();
     evt.stopPropagation();
-    const blockEl = evt.currentTarget.closest ? evt.currentTarget.closest('.time-grid-v-block') : evt.target.closest('.time-grid-v-block');
+    const blockEl = evt.currentTarget.closest ? evt.currentTarget.closest('.time-grid-v-block, .time-grid-week-block') : evt.target.closest('.time-grid-v-block, .time-grid-week-block');
     if(!blockEl) return;
     // 오전/오후 두 트랙(일간) 또는 7개 요일 트랙(주간) 다 잡아둠 — 드래그 끝났을 때 커서가 다른 트랙 위에
     // 있으면 그 트랙 기준으로 계산해서 오전<->오후, 또는 요일 간 드래그도 되게 함
