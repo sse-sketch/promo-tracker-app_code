@@ -752,6 +752,7 @@
   .field{margin-bottom:15px;}
   .field label{display:block;font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;}
   .modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:8px;}
+  .modal-footer .btn{padding:9px 16px;font-size:13px;}
   .attach-row{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap;}
   .attach-btn{
     border:1px dashed var(--line);background:var(--surface-2);color:var(--ink-soft);
@@ -2676,8 +2677,10 @@
     if(!task.recurrence){
       if(task.createdDate && jd < task.createdDate) return false; // 지정한 날짜 되기 전엔 안 보임
       // 시각이 지정된 할일(할일/미팅/제안/컨택/검토 다 포함)은 "그날 하루"만 뜸 — 안 끝났으면 이월되는 대신
-      // 드래그로 다른 날에 직접 옮기면 됨. 시각이 아예 없는 항목(체크리스트성 할일)만 계속 이월됨
-      if(task.time) return jd === task.createdDate;
+      // 드래그로 다른 날에 직접 옮기면 됨. 시각이 아예 없는 항목(체크리스트성 할일)만 계속 이월됨.
+      // 단, 프로모션에 연결된 리마인더(마감/선정확인 등)는 예외 — 언제 해결될지 모르는 항목이라 하루만 뜨고
+      // 사라지면 안 되고, isLinkedTaskStillRelevant가 따로 "해결될 때까지" 계속 보여줄지를 판단함
+      if(task.time && !task.linkedItemId) return jd === task.createdDate;
       // 주말엔 이월 안 시킴 — 안 끝난 평일 할일이 토/일까지 계속 떠 있을 이유가 없음(주말엔 원래 일 안 하니까).
       // 다만 애초에 토/일에 만든 항목이면(그날 하려고 넣은 거니까) 그날은 그대로 보여줌
       const dow = new Date(jd + 'T00:00:00').getDay();
@@ -3499,7 +3502,9 @@
     journalTasks.push({
       id: 'jt_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
       text: journalLinkedFallbackText(item, 'selection'),
-      category: 'todo', recurrence: null, done: false, doneDates: {}, createdDate: todayISO(), time: '', notes: '',
+      // 마감 리마인더가 시간표에서 사라지고 나서 아무것도 안 남는 게 아니라, 이 후속 리마인더도 시간표에 계속
+      // 보이게 시각을 넣어둠(오전 9시 기본 — 드래그로 원하는 시간에 옮기면 됨)
+      category: 'todo', recurrence: null, done: false, doneDates: {}, createdDate: todayISO(), time: '09:00', endTime: '09:30', notes:'',
       linkedItemId: item.id, linkedType: 'selection'
     });
     persistJournalTasks();
@@ -3508,6 +3513,7 @@
     const item = items.find(i => i.id === itemId);
     if(!item) return;
     item.status = 'submitted';
+    if(!item.selection) item.selection = 'pending'; // 빠른 제출완료는 당연히 아직 선정 확인 전이라는 뜻
     ensureSelectionReminder(item);
     persist();
     render();
@@ -6491,11 +6497,11 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                 <span class="journal-type-chip ${memoTask.category==='issue'?'journal-type-chip-active journal-type-chip-issue':''}" onclick="App.setJournalTaskKind('${memoTask.id}', 'issue')">👀 팔로우업</span>
               </div>
               <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-                <input type="text" class="journal-memo-title-input" style="margin-bottom:0;flex:1;" value="${escapeHtml(memoTask.text)}" placeholder="내용" oninput="App.updateJournalTaskText('${memoTask.id}', this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();App.saveJournalMemoNow();}" autofocus />
                 <span class="star-toggle ${memoTask.starred?'is-starred':''}" style="cursor:pointer;flex-shrink:0;" onclick="App.toggleJournalTaskStar('${memoTask.id}')" title="중요 표시">${memoTask.starred?'★':'☆'}</span>
+                <input type="text" class="journal-memo-title-input" style="margin-bottom:0;flex:1;" value="${escapeHtml(memoTask.text)}" placeholder="내용" oninput="App.updateJournalTaskText('${memoTask.id}', this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();App.saveJournalMemoNow();}" autofocus />
               </div>
               <div style="display:flex;gap:10px;align-items:flex-end;">
-                <div class="journal-memo-due" style="flex:1;margin-bottom:0;">
+                <div class="journal-memo-due" style="flex:0 0 150px;margin-bottom:0;">
                   <label>날짜</label>
                   <input type="date" value="${escapeHtml(memoTask.createdDate||journalDate)}" onchange="App.updateJournalTaskCreatedDate('${memoTask.id}', this.value)" />
                 </div>
@@ -6504,7 +6510,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                     <input type="checkbox" ${memoTask.done?'checked':''} onchange="App.toggleJournalTaskDone('${memoTask.id}', '${journalDate}')" />
                     완료 처리
                   </label>
-                ` : '<div style="flex:1;"></div>'}
+                ` : ''}
               </div>
               <div class="journal-memo-edit-row">
                 <select class="journal-time-input" onchange="App.updateJournalTaskTime('${memoTask.id}', this.value)" title="시작 시각">${timeSelectOptions(memoTask.time)}</select>
@@ -6549,10 +6555,10 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
             <textarea class="journal-memo-textarea" placeholder="상세 내용, 참고사항 등을 자유롭게 적어두세요" oninput="App.updateJournalTaskNotes('${memoTask.id}', this.value)">${escapeHtml(memoTask.notes||'')}</textarea>
             <div class="hint" style="margin-top:8px;color:var(--ink-faint);">이 안에서 바꾼 내용은 "저장" 버튼을 눌러야 한번에 반영돼요</div>
             <div style="display:flex;gap:8px;margin-top:10px;">
-              <button type="button" class="btn btn-ghost" style="flex:1;" onclick="App.closeFloatingDetail()">닫기</button>
-              <button type="button" class="btn ${journalMemoDirty ? 'btn-primary' : 'btn-ghost'}" style="flex:1;" onclick="App.saveJournalMemoNow()">${journalMemoDirty ? '● 저장' : '저장'}</button>
+              <button type="button" class="btn btn-ghost" style="flex:1;padding:9px 16px;font-size:13px;" onclick="App.closeFloatingDetail()">닫기</button>
+              <button type="button" class="btn ${journalMemoDirty ? 'btn-primary' : 'btn-ghost'}" style="flex:1;padding:9px 16px;font-size:13px;" onclick="App.saveJournalMemoNow()">${journalMemoDirty ? '● 저장' : '저장'}</button>
             </div>
-            <button type="button" class="btn-text-danger" style="width:100%;margin-top:8px;" onclick="App.deleteJournalTaskFromMemo()">삭제</button>
+            <button type="button" class="btn-text-danger" style="width:100%;margin-top:6px;" onclick="App.deleteJournalTaskFromMemo()">삭제</button>
           </div>
           </div>
         `;
