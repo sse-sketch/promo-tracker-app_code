@@ -3282,7 +3282,13 @@
     // 두 번째 드래그부터) 엉뚱한 계산이 나와서 놓았을 때 원래 자리로 되돌아가 보이는 문제가 있었음
     let targetTrack = null;
     let dropEl = null;
+    // 드래그 중인 블록 자신이 커서 바로 아래 있어서(z-index가 있으니) elementFromPoint가 트랙이 아니라
+    // 이 블록 자체를 돌려주는 문제가 있었음 — 그러면 항상 "원래 있던 칸"으로만 계산돼서 다른 요일/시간으로
+    // 옮기려 해도 엉뚱한 결과가 나옴. 조회하는 그 순간만 블록을 히트테스트에서 잠깐 빼줌
+    const prevPointerEvents = st.blockEl.style.pointerEvents;
+    st.blockEl.style.pointerEvents = 'none';
     try{ dropEl = (typeof document.elementFromPoint === 'function') ? document.elementFromPoint(evt.clientX, evt.clientY) : null; }catch(e){ dropEl = null; }
+    st.blockEl.style.pointerEvents = prevPointerEvents;
     const dropTrackEl = (dropEl && dropEl.closest) ? dropEl.closest('.time-grid-v-track') : null;
     if(dropTrackEl){
       targetTrack = {
@@ -3335,7 +3341,7 @@
     // 드래그로 이미 정확한 위치에 스냅되어 있는 상태를 브라우저가 한 번 깨끗하게 그리고 난 다음에
     // 무거운 전체 재렌더링이 들어가게 함 — 안 그러면 마우스 놓자마자 바로 무거운 render()가 같은 프레임에
     // 끼어들면서 살짝 멈칫하는 것처럼 보임
-    requestAnimationFrame(() => render());
+    if(typeof requestAnimationFrame === 'function') requestAnimationFrame(() => render()); else render();
   }
   // 시간표에서 이미 있는 블록이 아니라 빈 곳을 클릭했을 때만 동작 — 클릭한 세로 위치를 시각으로 환산(30분 단위로 스냅)
   function handleTimeGridTrackClick(evt, jd, halfStartMin, totalMin, colHeight){
