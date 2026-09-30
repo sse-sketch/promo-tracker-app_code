@@ -299,6 +299,8 @@
   .cal-header{display:flex;align-items:center;justify-content:center;gap:18px;margin-bottom:12px;}
   .journal-nav{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:8px;}
   .journal-date{font-family:var(--serif);font-size:17px;font-weight:700;color:var(--ink);min-width:200px;text-align:center;}
+  .journal-date.is-sunday{color:var(--urgent);}
+  .journal-date.is-saturday{color:#3B6BC9;}
   .journal-today-badge{font-size:11px;font-weight:700;color:var(--brand);background:var(--brand-soft);padding:2px 8px;border-radius:999px;margin-left:6px;}
   .journal-today-btn{padding:6px 12px;font-size:12px;}
   .journal-holiday-wrap{position:absolute;right:0;top:50%;transform:translateY(-50%);}
@@ -416,7 +418,13 @@
   .cal-cell.cal-empty{background:transparent;border:none;}
   .cal-cell.has-items{cursor:pointer;}
   .cal-cell.has-items:hover{border-color:var(--brand);}
+  .cal-cell.is-today{border:2px solid var(--brand);background:var(--brand-soft);}
   .cal-cell.is-today .cal-daynum{color:var(--brand);font-weight:800;}
+  .cal-cell.is-sunday .cal-daynum{color:var(--urgent);}
+  .cal-cell.is-saturday .cal-daynum{color:#3B6BC9;}
+  .cal-cell.is-holiday{background:var(--urgent-soft);border-color:var(--urgent);}
+  .cal-cell.is-holiday .cal-daynum{color:var(--urgent);font-weight:800;}
+  .cal-cell.is-holiday.is-today{background:var(--urgent-soft);border:2px solid var(--urgent);}
   .cal-cell.is-selected{border-color:var(--brand);background:var(--brand-soft);}
   .cal-daynum{font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);}
   .mini-datepicker{
@@ -1833,7 +1841,9 @@
       const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       const isToday = dateStr === todayISO();
       const isSelected = dateStr === journalDate;
-      html += `<div class="cal-cell mini-cal-cell ${isToday?'is-today':''} ${isSelected?'is-selected':''}" onclick="App.pickJournalDate('${dateStr}')">
+      const cellDow = new Date(year, month, d).getDay();
+      const cellHoliday = getEffectiveHoliday(dateStr);
+      html += `<div class="cal-cell mini-cal-cell ${isToday?'is-today':''} ${isSelected?'is-selected':''} ${cellDow===0?'is-sunday':''} ${cellDow===6?'is-saturday':''} ${cellHoliday?'is-holiday':''}" onclick="App.pickJournalDate('${dateStr}')" title="${cellHoliday?escapeHtml(cellHoliday.label):''}">
         <div class="cal-daynum">${d}</div>
       </div>`;
     }
@@ -2622,10 +2632,13 @@
     journalDatePickerOpen = false;
     if(mode !== 'day'){ journalSelectMode = false; journalSelectedIds.clear(); }
     if(mode === 'week'){ journalWeekAnchor = calcWeekStart(new Date(journalDate + 'T00:00:00')); } // 보고있던 날짜가 있는 주로 맞춰줌
+    if(mode === 'month'){ const jd = new Date(journalDate + 'T00:00:00'); journalCalendarMonth = new Date(jd.getFullYear(), jd.getMonth(), 1); } // 마찬가지로 월별도 보고있던 날짜가 있는 달로 맞춰줌
     render();
   }
   function journalCalPrev(){ journalCalendarMonth = new Date(journalCalendarMonth.getFullYear(), journalCalendarMonth.getMonth()-1, 1); render(); }
   function journalCalNext(){ journalCalendarMonth = new Date(journalCalendarMonth.getFullYear(), journalCalendarMonth.getMonth()+1, 1); render(); }
+  function journalCalGoToday(){ const n = new Date(); journalCalendarMonth = new Date(n.getFullYear(), n.getMonth(), 1); render(); }
+  function journalWeekGoToday(){ journalWeekAnchor = calcWeekStart(new Date()); journalDatePickerOpen = false; render(); }
   function journalWeekPrev(){ journalWeekAnchor = new Date(journalWeekAnchor.getFullYear(), journalWeekAnchor.getMonth(), journalWeekAnchor.getDate()-7); journalDatePickerOpen = false; render(); }
   function journalWeekNext(){ journalWeekAnchor = new Date(journalWeekAnchor.getFullYear(), journalWeekAnchor.getMonth(), journalWeekAnchor.getDate()+7); journalDatePickerOpen = false; render(); }
   function journalGoToDate(dateStr){
@@ -3207,15 +3220,6 @@
     evt.stopPropagation();
     const blockEl = evt.currentTarget.closest ? evt.currentTarget.closest('.time-grid-v-block, .time-grid-week-block') : evt.target.closest('.time-grid-v-block, .time-grid-week-block');
     if(!blockEl) return;
-    // 오전/오후 두 트랙(일간) 또는 7개 요일 트랙(주간) 다 잡아둠 — 드래그 끝났을 때 커서가 다른 트랙 위에
-    // 있으면 그 트랙 기준으로 계산해서 오전<->오후, 또는 요일 간 드래그도 되게 함
-    const wrap = blockEl.closest('.time-grid-v-wrap, .time-grid-week-wrap');
-    const tracks = wrap ? Array.from(wrap.querySelectorAll('.time-grid-v-track')).map(el => ({
-      rect: el.getBoundingClientRect(),
-      halfStart: parseFloat(el.dataset.halfStart),
-      totalMin: parseFloat(el.dataset.totalMin) || (parseFloat(blockEl.dataset.totalMin)),
-      date: el.dataset.date || null
-    })) : [];
     blockDragState = {
       taskId, mode,
       moved: false,
@@ -3225,7 +3229,6 @@
       halfStartMin: parseFloat(blockEl.dataset.halfStart),
       totalMin: parseFloat(blockEl.dataset.totalMin),
       colHeight: parseFloat(blockEl.dataset.colHeight),
-      tracks,
       blockEl
     };
     document.addEventListener('mousemove', onBlockDragMove);
@@ -3258,10 +3261,20 @@
     blockJustDragged = true;
     const task = journalTasks.find(t => t.id === st.taskId);
     if(!task){ render(); return; }
-    // 드롭한 위치(커서의 x,y)가 어느 트랙 위인지 확인 — 반대쪽 트랙이면 그 트랙 기준으로 계산
+    // 드롭한 위치(커서의 x,y) 아래에 실제로 어떤 트랙이 있는지 그 순간에 직접 다시 찾음 — 드래그 시작할 때
+    // 미리 캐시해둔 좌표를 쓰면, 그 사이에 스크롤바가 생기는 등 레이아웃이 아주 살짝만 틀어져도 (특히
+    // 두 번째 드래그부터) 엉뚱한 계산이 나와서 놓았을 때 원래 자리로 되돌아가 보이는 문제가 있었음
     let targetTrack = null;
-    for(const t of st.tracks){
-      if(evt.clientX >= t.rect.left && evt.clientX <= t.rect.right){ targetTrack = t; break; }
+    let dropEl = null;
+    try{ dropEl = (typeof document.elementFromPoint === 'function') ? document.elementFromPoint(evt.clientX, evt.clientY) : null; }catch(e){ dropEl = null; }
+    const dropTrackEl = (dropEl && dropEl.closest) ? dropEl.closest('.time-grid-v-track') : null;
+    if(dropTrackEl){
+      targetTrack = {
+        rect: dropTrackEl.getBoundingClientRect(),
+        halfStart: parseFloat(dropTrackEl.dataset.halfStart),
+        totalMin: parseFloat(dropTrackEl.dataset.totalMin),
+        date: dropTrackEl.dataset.date || null
+      };
     }
     const useHalfStart = targetTrack ? targetTrack.halfStart : st.halfStartMin;
     const useTotalMin = targetTrack ? targetTrack.totalMin : st.totalMin;
@@ -3303,7 +3316,10 @@
       task.endTime = `${String(Math.floor(newEndMin/60)).padStart(2,'0')}:${String(newEndMin%60).padStart(2,'0')}`;
     }
     persistJournalTasks();
-    render();
+    // 드래그로 이미 정확한 위치에 스냅되어 있는 상태를 브라우저가 한 번 깨끗하게 그리고 난 다음에
+    // 무거운 전체 재렌더링이 들어가게 함 — 안 그러면 마우스 놓자마자 바로 무거운 render()가 같은 프레임에
+    // 끼어들면서 살짝 멈칫하는 것처럼 보임
+    requestAnimationFrame(() => render());
   }
   // 시간표에서 이미 있는 블록이 아니라 빈 곳을 클릭했을 때만 동작 — 클릭한 세로 위치를 시각으로 환산(30분 단위로 스냅)
   function handleTimeGridTrackClick(evt, jd, halfStartMin, totalMin, colHeight){
@@ -5581,10 +5597,12 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         const firstWeekday = new Date(year, month, 1).getDay();
         const daysInMonth = new Date(year, month+1, 0).getDate();
         const monthLabel = `${year}. ${String(month+1).padStart(2,'0')}`;
+        const isCurrentMonth = year === new Date().getFullYear() && month === new Date().getMonth();
         html += `<div class="cal-header">
           <button class="icon-btn" onclick="App.journalCalPrev()">‹</button>
           <div class="cal-month-label">${monthLabel}</div>
           <button class="icon-btn" onclick="App.journalCalNext()">›</button>
+          <button class="btn btn-ghost journal-today-btn ${isCurrentMonth?'is-current':''}" style="margin-left:8px;" onclick="${isCurrentMonth ? '' : "App.journalCalGoToday()"}">오늘</button>
         </div>`;
         html += `<div class="cal-grid">`;
         ['일','월','화','수','목','금','토'].forEach(d => { html += `<div class="cal-dow">${d}</div>`; });
@@ -5596,13 +5614,15 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
           const pendingCount = scheduledTasks.filter(t => !isTaskDoneOnDate(t, dateStr)).length;
           const isPastOverdue = dateStr < todayISO() && pendingCount > 0;
           const isToday = dateStr === todayISO();
+          const cellDow = new Date(year, month, d).getDay();
+          const cellHoliday = getEffectiveHoliday(dateStr);
           const pendingDotClass = isPastOverdue ? 'cal-dot-urgent' : 'cal-dot-pending';
           let dots = '';
           for(let k=0; k<Math.min(pendingCount,3); k++){ dots += `<span class="cal-dot ${pendingDotClass}"></span>`; }
           for(let k=0; k<Math.min(doneCount,3); k++){ dots += `<span class="cal-dot cal-dot-calm"></span>`; }
           const extra = Math.max(0,pendingCount-3) + Math.max(0,doneCount-3);
           if(extra > 0) dots += `<span class="cal-dot-more">+${extra}</span>`;
-          html += `<div class="cal-cell ${isToday?'is-today':''} ${(pendingCount||doneCount)?'has-items':''}" onclick="App.journalGoToDate('${dateStr}')">
+          html += `<div class="cal-cell ${isToday?'is-today':''} ${(pendingCount||doneCount)?'has-items':''} ${cellDow===0?'is-sunday':''} ${cellDow===6?'is-saturday':''} ${cellHoliday?'is-holiday':''}" onclick="App.journalGoToDate('${dateStr}')" title="${cellHoliday?escapeHtml(cellHoliday.label):''}">
             <div class="cal-daynum">${d}</div>
             <div class="cal-dots">${dots}</div>
           </div>`;
@@ -5613,10 +5633,12 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       }else if(journalViewMode === 'week'){
         const weekEnd = new Date(journalWeekAnchor.getFullYear(), journalWeekAnchor.getMonth(), journalWeekAnchor.getDate()+6);
         const fmtW = (d) => `${d.getMonth()+1}.${d.getDate()}`;
+        const isCurrentWeek = toISO(journalWeekAnchor) === toISO(calcWeekStart(new Date()));
         html += `<div class="cal-header" style="position:relative;">
           <button class="icon-btn" onclick="App.journalWeekPrev()">‹</button>
           <div class="cal-month-label" style="cursor:pointer;" onclick="App.toggleJournalDatePicker()" title="날짜로 바로 이동">${fmtW(journalWeekAnchor)} - ${fmtW(weekEnd)}</div>
           <button class="icon-btn" onclick="App.journalWeekNext()">›</button>
+          <button class="btn btn-ghost journal-today-btn ${isCurrentWeek?'is-current':''}" style="margin-left:8px;" onclick="${isCurrentWeek ? '' : "App.journalWeekGoToday()"}">오늘</button>
           ${journalDatePickerOpen ? renderMiniDatePicker() : ''}
         </div>`;
         html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
@@ -5668,7 +5690,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
 
       html += `<div class="journal-nav" style="position:relative;">
         <button class="icon-btn" onclick="App.journalShiftDay(-1)">‹</button>
-        <div class="journal-date" style="cursor:pointer;" onclick="App.toggleJournalDatePicker()" title="날짜로 바로 이동">${dateLabel}</div>
+        <div class="journal-date ${dObj.getDay()===0?'is-sunday':''} ${dObj.getDay()===6?'is-saturday':''}" style="cursor:pointer;" onclick="App.toggleJournalDatePicker()" title="날짜로 바로 이동">${dateLabel}</div>
         <button class="icon-btn" onclick="App.journalShiftDay(1)">›</button>
         <button class="btn btn-ghost journal-today-btn ${isToday?'is-current':''}" onclick="${isToday ? '' : "App.journalGoToday()"}">오늘</button>
         <div class="journal-holiday-wrap">
@@ -6713,8 +6735,10 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     journalGoToday,
     setJournalHoliday,
     setJournalViewMode,
+    journalCalGoToday,
     journalCalPrev,
     journalCalNext,
+    journalWeekGoToday,
     journalWeekPrev,
     journalWeekNext,
     journalGoToDate,
