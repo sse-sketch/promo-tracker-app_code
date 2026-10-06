@@ -3444,8 +3444,25 @@
   }
   function saveJournalMemoNow(){
     // 초안(아직 journalTasks에 없는 상태)이면 지금이 처음 저장하는 순간이니 이제야 실제로 목록에 추가함
+    let originalTaskText = '';
     if(floatingDetail && floatingDetail.type === 'memo' && floatingDetail.draft){
       journalTasks.push(floatingDetail.draft);
+      originalTaskText = floatingDetail.draft.text;
+    }else if(floatingDetail && floatingDetail.type === 'memo'){
+      const t = journalTasks.find(x => x.id === floatingDetail.taskId);
+      if(t) originalTaskText = t.text;
+    }
+    // 후속업무 필요 체크돼 있으면, 지정한 날짜/시각으로 새 할일을 하나 더 만듦(팝업 없이 바로)
+    if(floatingDetail && floatingDetail.wantsFollowup && floatingDetail.followupDate){
+      const followDate = floatingDetail.followupDate;
+      const followTime = floatingDetail.followupTime || '';
+      const startMin = followTime ? timeToMinutes(followTime) : null;
+      const endTime = startMin !== null ? `${String(Math.floor((startMin+30)/60)).padStart(2,'0')}:${String((startMin+30)%60).padStart(2,'0')}` : '';
+      journalTasks.push({
+        id: 'jt_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+        text: `${originalTaskText} 후속 처리`, category:'todo', taskType:'todo', recurrence:null, done:false, doneDates:{},
+        createdDate: followDate, time: followTime, endTime, notes:'', dueDate:'', completedDate:null
+      });
     }
     persistJournalTasks();
     journalMemoDirty = false;
@@ -3468,13 +3485,34 @@
     journalMemoDirty = true;
     render();
   }
+  // 메모 안에서 "완료 처리"랑 별개로 "후속업무 필요"를 체크하면, 팝업으로 물어보는 대신 그 자리에서 바로
+  // 날짜/시각을 지정해서 저장할 때 같이 처리함(floatingDetail에만 잠깐 담아두는 값이라 작업 자체엔 안 남음)
+  function toggleJournalFollowupWanted(){
+    if(!floatingDetail) return;
+    floatingDetail.wantsFollowup = !floatingDetail.wantsFollowup;
+    if(floatingDetail.wantsFollowup && !floatingDetail.followupDate){
+      floatingDetail.followupDate = journalDate;
+      floatingDetail.followupTime = nowSnappedTimeStr();
+    }
+    render();
+  }
+  function updateJournalFollowupDate(value){
+    if(!floatingDetail) return;
+    floatingDetail.followupDate = value;
+  }
+  function updateJournalFollowupTime(value){
+    if(!floatingDetail) return;
+    floatingDetail.followupTime = value;
+  }
   function toggleJournalTaskDone(id, dateStr){
     const task = journalTasks.find(t => t.id === id);
     if(!task) return;
     const dateKey = dateStr || todayISO(); // 명시 안 하면 오늘 기준(이전엔 화면에 떠있던 journalDate를 써서, 주별뷰/대시보드에서 엉뚱한 날짜가 체크되는 버그가 있었음)
     // 할일을 완료로 체크하는 순간(체크 해제 말고 체크할 때만)엔, 후속 업무로 이어갈지 먼저 물어봄 —
     // 하나로 끝나는 게 아니라 보통 실제 후속 확인/처리 업무가 따라오는 경우가 많아서 (모든 타입 공통 적용)
-    if(!task.recurrence && !task.done && !task.linkedItemId){
+    const isFromOwnOpenMemo = floatingDetail && floatingDetail.type === 'memo' &&
+      (floatingDetail.taskId === id || (floatingDetail.draft && floatingDetail.draft.id === id));
+    if(!task.recurrence && !task.done && !task.linkedItemId && !isFromOwnOpenMemo){
       confirmModal = {
         message: `"${task.text}" 완료 처리할게요.\n관련 후속 업무도 이어서 만들까요?`,
         type: 'proposalFollowup',
@@ -6555,6 +6593,24 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                   </label>
                 ` : ''}
               </div>
+              ${(!memoTask.recurrence && !journalMemoIsNew && !memoTask.linkedItemId) ? `
+                <label class="journal-memo-done-row" style="margin-bottom:${floatingDetail.wantsFollowup?'8px':'14px'};">
+                  <input type="checkbox" ${floatingDetail.wantsFollowup?'checked':''} onchange="App.toggleJournalFollowupWanted()" />
+                  + 후속업무 필요
+                </label>
+                ${floatingDetail.wantsFollowup ? `
+                  <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px;padding:10px;background:var(--surface-2);border-radius:10px;">
+                    <div class="journal-memo-due" style="flex:0 0 150px;margin-bottom:0;">
+                      <label>후속업무 날짜</label>
+                      <input type="date" value="${escapeHtml(floatingDetail.followupDate||memoTask.createdDate||journalDate)}" onchange="App.updateJournalFollowupDate(this.value)" />
+                    </div>
+                    <div style="flex:1;">
+                      <label style="display:block;font-size:12px;color:var(--ink-faint);margin-bottom:4px;">시각</label>
+                      <select class="journal-time-input" style="width:100%;" onchange="App.updateJournalFollowupTime(this.value)" title="후속업무 시작 시각">${timeSelectOptions(floatingDetail.followupTime)}</select>
+                    </div>
+                  </div>
+                ` : ''}
+              ` : ''}
               <div class="journal-memo-edit-row">
                 <select class="journal-time-input" onchange="App.updateJournalTaskTime('${memoTask.id}', this.value)" title="시작 시각">${timeSelectOptions(memoTask.time)}</select>
                 <span style="color:var(--ink-faint);">~</span>
@@ -6808,6 +6864,9 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     confirmNewChannel,
     closeFloatingDetail,
     toggleJournalTaskDone,
+    toggleJournalFollowupWanted,
+    updateJournalFollowupDate,
+    updateJournalFollowupTime,
     openTaskCheckAction,
     toggleItemStar,
     toggleJournalTaskStar,
