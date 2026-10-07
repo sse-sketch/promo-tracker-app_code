@@ -778,6 +778,24 @@
   .memo-modal .journal-memo-textarea{min-height:72px;padding:9px 11px;}
   .memo-modal .journal-memo-due{margin-bottom:8px;}
   .memo-footer{display:flex;gap:8px;align-items:center;margin-top:10px;}
+  /* 입력 중인 창에서 바깥을 눌렀을 때 — 닫지 않고 살짝 흔들어서 알려줌 */
+  @keyframes modalNudge{0%,100%{transform:translateX(0);}20%{transform:translateX(-7px);}40%{transform:translateX(7px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}
+  .modal-nudge{animation:modalNudge .38s ease;}
+  .nudge-hint{position:fixed;left:50%;top:18px;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:12.5px;font-weight:600;padding:8px 16px;border-radius:999px;z-index:300;box-shadow:0 10px 24px -8px rgba(35,46,41,0.5);pointer-events:none;white-space:nowrap;}
+  /* 근무 상태(연차/반차) 일괄 지정 창 */
+  .holiday-range-row{display:flex;gap:8px;align-items:center;margin:2px 0 8px;}
+  .holiday-range-row .memo-date-input{flex:1;min-width:0;width:auto;}
+  .holiday-range-row > span{color:var(--ink-faint);}
+  .holiday-summary{font-size:12px;color:var(--ink-soft);margin:0 0 10px;line-height:1.5;}
+  .holiday-summary b{color:var(--ink);}
+  .holiday-info{font-size:12.5px;font-weight:700;color:var(--urgent);background:var(--urgent-soft);border-radius:10px;padding:8px 12px;margin:0 0 10px;line-height:1.5;}
+  .holiday-info small{display:block;font-weight:500;color:var(--ink-soft);}
+  .holiday-reset{display:block;margin:12px auto 0;background:none;border:none;font-size:12px;color:var(--ink-faint);cursor:pointer;text-decoration:underline;font-family:var(--sans);}
+  .holiday-reset:hover{color:var(--ink-soft);}
+  @media (max-width:520px){
+    .cal-header.has-holiday-btn{flex-wrap:wrap;}
+    .cal-header.has-holiday-btn .journal-holiday-wrap{flex-basis:100%;justify-content:center;margin:6px 0 0;}
+  }
   @media (max-width:480px){
     .floating-panel{left:16px;right:16px;width:auto;bottom:90px;}
   }
@@ -1286,6 +1304,7 @@
     const cfg = AppStorage.getConfig();
     storageSettingsForm = cfg ? Object.assign({ owner:'', repo:'', branch:'main', token:'' }, cfg) : { owner:'', repo:'', branch:'main', token:'' };
     storageSettingsError = '';
+    closeOtherBigPopups('storage');
     storageSettingsOpen = true;
     render();
   }
@@ -1330,7 +1349,11 @@
   }
 
   let topMenuOpen = false;
-  function toggleTopMenu(){ topMenuOpen = !topMenuOpen; render(); }
+  function toggleTopMenu(){
+    if(!topMenuOpen){ journalDatePickerOpen = false; ganttDatePickerOpen = false; }
+    topMenuOpen = !topMenuOpen;
+    render();
+  }
   let runningNowShowUnjoined = false;
   function toggleRunningNowUnjoined(){ runningNowShowUnjoined = !runningNowShowUnjoined; render(); }
   let dashboardStatsExpanded = false;
@@ -1339,7 +1362,7 @@
   // 통합 검색 — 상세 프로모션 / 업무일지 두 군데를 각각 안 뒤지고 한 번에 찾기
   let globalSearchOpen = false;
   let globalSearchQuery = '';
-  function openGlobalSearch(){ globalSearchOpen = true; globalSearchQuery = ''; render(); }
+  function openGlobalSearch(){ closeOtherBigPopups('search'); globalSearchOpen = true; globalSearchQuery = ''; render(); }
   function closeGlobalSearch(){ globalSearchOpen = false; render(); }
   function setGlobalSearchQuery(v){ globalSearchQuery = v; render(); }
   function matchesTaskSearch(task, q){
@@ -1359,7 +1382,7 @@
   function goToGlobalSearchPromo(id){
     closeGlobalSearch();
     setMainTab('detail');
-    openEdit(id);
+    openEditModal(id);
   }
   function goToGlobalSearchTask(taskId){
     closeGlobalSearch();
@@ -1367,14 +1390,14 @@
     setMainTab('journal');
     if(task && task.linkedItemId){
       const linkedItem = items.find(i => i.id === task.linkedItemId);
-      if(linkedItem){ setMainTab('detail'); openEdit(linkedItem.id); return; }
+      if(linkedItem){ setMainTab('detail'); openEditModal(linkedItem.id); return; }
     }
     openTaskMemo(taskId);
   }
 
   let backupOpen = false;
   let monthlyReportOpen = false;
-  function openMonthlyReport(){ monthlyReportOpen = true; render(); }
+  function openMonthlyReport(){ closeOtherBigPopups('report'); monthlyReportOpen = true; render(); }
   function closeMonthlyReport(){ monthlyReportOpen = false; render(); }
   function printMonthlyReport(){ window.print(); }
   let backupImportText = '';
@@ -1493,6 +1516,7 @@
     render();
   }
   function openBackup(){
+    closeOtherBigPopups('backup');
     backupOpen = true;
     backupImportText = '';
     render();
@@ -1678,7 +1702,7 @@
   let channelRenameOpen = false;
   let renameFrom = '';
   let renameTo = '';
-  function openChannelRename(){ channelRenameOpen = true; renameFrom = ''; renameTo = ''; render(); }
+  function openChannelRename(){ closeOtherBigPopups('rename'); channelRenameOpen = true; renameFrom = ''; renameTo = ''; render(); }
   function closeChannelRename(){ channelRenameOpen = false; render(); }
   function updateRenameFrom(v){ renameFrom = v; }
   function updateRenameTo(v){ renameTo = v; }
@@ -1712,7 +1736,7 @@
 
   let channelManageOpen = false;
   let newChannelInput = '';
-  function openChannelManage(){ channelManageOpen = true; newChannelInput = ''; render(); }
+  function openChannelManage(){ closeOtherBigPopups('manage'); channelManageOpen = true; newChannelInput = ''; render(); }
   function closeChannelManage(){ channelManageOpen = false; render(); }
   function updateNewChannelInput(v){ newChannelInput = v; }
   function addManagedChannel(){
@@ -1758,6 +1782,7 @@
   let mainTab = 'journal';
   function setMainTab(tab){
     mainTab = tab;
+    closeLightPopups();
     floatingDetail = null; // 플로팅 패널은 특정 항목에 종속된 거라, 다른 탭으로 넘어가면 닫혀야 함
     journalSelectMode = false;
     journalSelectedIds.clear();
@@ -1817,9 +1842,28 @@
   let journalCalendarMonth = new Date();
   let journalDatePickerOpen = false;
   let journalHolidayPickerOpen = false;
-  function toggleJournalHolidayPicker(){ journalHolidayPickerOpen = !journalHolidayPickerOpen; render(); }
+  let holidayRange = { start:'', end:'', skip:true }; // 근무 상태를 적용할 날짜 범위 — 창을 열 때 보고 있던 화면 기준으로 채워짐
+  function toggleJournalHolidayPicker(){
+    if(!journalHolidayPickerOpen){
+      closeOtherBigPopups('holiday');
+      let start = journalDate, end = journalDate;
+      if(journalViewMode === 'week'){
+        const a = journalWeekAnchor; // 일요일 시작 → 월~금을 기본값으로
+        start = toISO(new Date(a.getFullYear(), a.getMonth(), a.getDate()+1));
+        end = toISO(new Date(a.getFullYear(), a.getMonth(), a.getDate()+5));
+      }else if(journalViewMode === 'month'){
+        const t = new Date();
+        const inShownMonth = t.getFullYear() === journalCalendarMonth.getFullYear() && t.getMonth() === journalCalendarMonth.getMonth();
+        start = end = inShownMonth ? todayISO() : toISO(new Date(journalCalendarMonth.getFullYear(), journalCalendarMonth.getMonth(), 1));
+      }
+      holidayRange = { start, end, skip:true };
+    }
+    journalHolidayPickerOpen = !journalHolidayPickerOpen;
+    render();
+  }
   let miniCalMode = 'day'; // 'day' | 'month' — 날짜 라벨 누르면 월 선택 모드로 전환
   function toggleJournalDatePicker(){
+    if(!journalDatePickerOpen){ ganttDatePickerOpen = false; topMenuOpen = false; }
     journalDatePickerOpen = !journalDatePickerOpen;
     miniCalMode = 'day';
     if(journalDatePickerOpen) journalCalendarMonth = new Date(journalDate + 'T00:00:00');
@@ -1893,6 +1937,7 @@
   let ganttDatePickerOpen = false;
   let ganttMiniCalMode = 'day';
   function toggleGanttDatePicker(){
+    if(!ganttDatePickerOpen){ journalDatePickerOpen = false; topMenuOpen = false; }
     ganttDatePickerOpen = !ganttDatePickerOpen;
     ganttMiniCalMode = 'day';
     render();
@@ -2676,11 +2721,112 @@
     annual: '연차', half_am: '오전반차', half_pm: '오후반차',
     quarter_am: '오전반반차', quarter_pm: '오후반반차'
   };
-  function setJournalHoliday(jd, type){
+  // 하루치 근무 상태 저장. 근무일('')은 자동 공휴일이 있는 날엔 "출근함"(null)으로 덮어쓰고, 없는 날엔 그냥 지움
+  function setHolidayForDate(jd, type){
     const entry = getJournalEntry(jd);
-    entry.holiday = type ? { type, label: HOLIDAY_TYPE_LABELS[type] || (KOREAN_HOLIDAYS_2026[jd] || '공휴일') } : null;
+    if(type){
+      entry.holiday = { type, label: HOLIDAY_TYPE_LABELS[type] || (KOREAN_HOLIDAYS_2026[jd] || '공휴일') };
+    }else if(KOREAN_HOLIDAYS_2026[jd]){
+      entry.holiday = null;
+    }else{
+      delete entry.holiday;
+    }
+  }
+  function setJournalHoliday(jd, type){
+    setHolidayForDate(jd, type);
     persistJournal();
     render();
+  }
+  const HOLIDAY_RANGE_MAX_DAYS = 400;
+  function holidayShortDate(ds){
+    const d = new Date(ds + 'T00:00:00');
+    return `${d.getMonth()+1}/${d.getDate()}(${'일월화수목금토'[d.getDay()]})`;
+  }
+  function planHolidayRange(){
+    const days = [];
+    const cur = new Date(holidayRange.start + 'T00:00:00');
+    const last = new Date(holidayRange.end + 'T00:00:00');
+    while(cur <= last && days.length < HOLIDAY_RANGE_MAX_DAYS){ days.push(toISO(cur)); cur.setDate(cur.getDate()+1); }
+    const multi = days.length > 1;
+    const targets = [], skipped = [];
+    days.forEach(ds => {
+      const dow = new Date(ds + 'T00:00:00').getDay();
+      const eff = getEffectiveHoliday(ds);
+      // 하루만 지정할 땐 주말/공휴일이어도 그대로 적용. 여러 날일 땐 체크하면 주말·공휴일은 건너뜀
+      if(multi && holidayRange.skip && (dow === 0 || dow === 6 || (eff && eff.type === 'public'))) skipped.push(ds);
+      else targets.push(ds);
+    });
+    return { days, multi, targets, skipped, capped: days.length >= HOLIDAY_RANGE_MAX_DAYS };
+  }
+  function setHolidayRangeStart(v){ if(!v) return; holidayRange.start = v; if(holidayRange.end < v) holidayRange.end = v; render(); }
+  function setHolidayRangeEnd(v){ if(!v) return; holidayRange.end = v; if(holidayRange.start > v) holidayRange.start = v; render(); }
+  function toggleHolidaySkip(){ holidayRange.skip = !holidayRange.skip; render(); }
+  function applyJournalHolidayRange(type){
+    const plan = planHolidayRange();
+    if(!plan.targets.length){ showToast('적용할 날짜가 없어요 (모두 주말·공휴일)'); return; }
+    plan.targets.forEach(ds => setHolidayForDate(ds, type));
+    persistJournal();
+    journalHolidayPickerOpen = false;
+    const label = type ? HOLIDAY_TYPE_LABELS[type] : '근무일';
+    const span = plan.multi ? `${holidayShortDate(holidayRange.start)} ~ ${holidayShortDate(holidayRange.end)}` : holidayShortDate(holidayRange.start);
+    showToast(`${label} 지정: ${span}${plan.multi ? ` · ${plan.targets.length}일` : ''}${plan.skipped.length ? ` (주말·공휴일 ${plan.skipped.length}일 제외)` : ''}`);
+  }
+  // 직접 지정한 연차/반차/근무일 표시를 지우고 자동 설정(공휴일 표)으로 되돌림
+  function resetJournalHolidayAuto(){
+    const plan = planHolidayRange();
+    let n = 0;
+    plan.days.forEach(ds => {
+      const e = journalEntries[ds];
+      if(e && e.holiday !== undefined){ delete e.holiday; n++; }
+    });
+    if(n) persistJournal();
+    journalHolidayPickerOpen = false;
+    showToast(n ? `${n}일을 자동 설정으로 되돌렸어요` : '되돌릴 설정이 없어요');
+  }
+  const HOLIDAY_PICKER_OPTS = [
+    { value:'', icon:'📋', label:'근무일' },
+    { value:'annual', icon:'🏖️', label:'연차' },
+    { value:'half_am', icon:'🌤️', label:'오전반차' },
+    { value:'half_pm', icon:'🌥️', label:'오후반차' },
+    { value:'quarter_am', icon:'⏱️', label:'오전반반차' },
+    { value:'quarter_pm', icon:'⏱️', label:'오후반반차' }
+  ];
+  function renderJournalHolidayButton(label){
+    return `<div class="journal-holiday-wrap">
+      <button type="button" class="btn btn-ghost journal-holiday-btn" onclick="event.stopPropagation();App.toggleJournalHolidayPicker()" title="연차·반차 등 근무 상태 지정 (여러 날 한 번에도 가능)">${label} ▾</button>
+    </div>`;
+  }
+  function renderJournalHolidayModal(){
+    const plan = planHolidayRange();
+    const r = holidayRange;
+    const eff = plan.multi ? null : getEffectiveHoliday(r.start);
+    const activeValue = plan.multi ? null : (eff ? (eff.type === 'public' ? null : eff.type) : '');
+    const hasManual = plan.days.some(ds => journalEntries[ds] && journalEntries[ds].holiday !== undefined);
+    return `
+      <div class="overlay" onclick="if(event.target===this) App.toggleJournalHolidayPicker();">
+        <div class="modal" style="max-width:360px;">
+          <h2 class="modal-title" style="margin-bottom:12px;">근무 상태 지정</h2>
+          <div class="holiday-range-row">
+            <input type="date" class="memo-date-input" value="${escapeHtml(r.start)}" onchange="App.setHolidayRangeStart(this.value)" title="시작일" />
+            <span>~</span>
+            <input type="date" class="memo-date-input" value="${escapeHtml(r.end)}" onchange="App.setHolidayRangeEnd(this.value)" title="종료일" />
+          </div>
+          ${plan.multi ? `
+            <label class="memo-toggle ${r.skip?'is-on':''}" style="margin-bottom:8px;">
+              <input type="checkbox" ${r.skip?'checked':''} onchange="App.toggleHolidaySkip()" />
+              주말·공휴일 건너뛰기
+            </label>
+            <div class="holiday-summary"><b>${plan.days.length}일</b> 중 <b>${plan.targets.length}일</b>에 적용${plan.skipped.length ? ` · 주말·공휴일 ${plan.skipped.length}일 제외` : ''}${plan.capped ? ` <span style="color:var(--urgent);">(최대 ${HOLIDAY_RANGE_MAX_DAYS}일까지)</span>` : ''}</div>
+          ` : (eff && eff.type === 'public' ? `
+            <div class="holiday-info">🎌 ${escapeHtml(eff.label || '공휴일')}<small>공휴일은 자동으로 표시돼요. 이 날 출근이면 '근무일'을 누르세요.</small></div>
+          ` : '')}
+          <div class="journal-holiday-pills" style="grid-template-columns:repeat(3, 1fr);">
+            ${HOLIDAY_PICKER_OPTS.map(o => `<span class="journal-holiday-pill ${activeValue !== null && o.value===activeValue?'active':''}" onclick="App.applyJournalHolidayRange('${o.value}')">${o.icon} ${o.label}</span>`).join('')}
+          </div>
+          ${hasManual ? `<button type="button" class="holiday-reset" onclick="App.resetJournalHolidayAuto()">↺ 직접 지정한 것 지우고 자동 설정으로</button>` : ''}
+          <button type="button" class="btn btn-ghost" style="width:100%;margin-top:14px;" onclick="App.toggleJournalHolidayPicker()">닫기</button>
+        </div>
+      </div>`;
   }
   function journalShiftDay(delta){
     const d = new Date(journalDate + 'T00:00:00');
@@ -3288,6 +3434,7 @@
       createdDate: dateStr, time: timeStr, endTime, notes:'', dueDate:'', completedDate:null
     };
     // journalTasks에 바로 안 넣음 — "저장" 누르기 전까진 초안 상태로만 존재해서 목록/시간표에 미리 안 나타남
+    closeOtherBigPopups('floating');
     floatingDetail = { type:'memo', taskId: id, draft };
     journalMemoDirty = false;
     journalMemoIsNew = true;
@@ -3459,6 +3606,7 @@
       id, text:'', category, taskType:'todo', recurrence:null, done:false, doneDates:{},
       createdDate: journalDate, time:'', notes:'', dueDate:'', completedDate:null
     };
+    closeOtherBigPopups('floating');
     floatingDetail = { type:'memo', taskId: id, draft };
     journalMemoDirty = false;
     journalMemoIsNew = true;
@@ -3855,11 +4003,13 @@
   }
 
   function openAddModal(){
+    closeOtherBigPopups('modal');
     modalState = {
       mode:'add', tab: AppStorage.hasNative() ? 'paste' : 'manual', editId:null,
       form:{channel:'', title:'', period:'', content:'', deadline:'', deadlineTime:'', status:'pending', notes:'', coupon:'', needsRecheck:false, setupTasks:[], setupType:'', setupDeadline:'', selection:'pending', assignee:'', starred:false},
       pasteText:'', pastedImages:[], reviewItems:null, reviewTasks:null, parsing:false, parseError:'', detailsExpanded:false
     };
+    modalState.initialSig = modalSig();
     render();
   }
   function toggleAddFormDetails(){
@@ -3875,16 +4025,56 @@
   function openEditModal(id){
     const item = items.find(i=>i.id===id);
     if(!item) return;
+    closeOtherBigPopups('modal');
     modalState = {
       mode:'edit', tab:'manual', editId:id,
       form:{channel:item.channel, title:item.title||'', period:item.period, content:item.content, deadline:item.deadline, deadlineTime:item.deadlineTime||'', status:item.status||'pending', notes:item.notes||'', coupon:item.coupon||'', needsRecheck:!!item.needsRecheck, setupTasks:(item.setupTasks||[]).map(t=>({id:t.id, label:t.label, done:!!t.done})), setupType:item.setupType||'', setupDeadline:item.setupDeadline||'', selection: item.selection || (item.status==='submitted' ? 'selected' : 'pending'), assignee:item.assignee||'', starred:!!item.starred},
       pasteText:'', pastedImages:[], parsing:false, parseError:'', detailsExpanded:false
     };
+    modalState.initialSig = modalSig();
     render();
   }
   function closeModal(){
     modalState = null;
     render();
+  }
+  // 등록/수정창: 내용이 바뀐 상태면 바깥(어두운 배경) 클릭으로는 안 닫힘. 닫기/✕/ESC는 그대로 닫힘
+  function modalSig(){
+    if(!modalState) return '';
+    const m = modalState;
+    return JSON.stringify([m.form, m.pasteText||'', (m.pastedImages||[]).length, m.reviewItems||null, m.reviewTasks||null]);
+  }
+  function isModalDirty(){
+    return !!modalState && modalState.initialSig !== undefined && modalSig() !== modalState.initialSig;
+  }
+  function nudgeModal(targetEl, msg){
+    if(!targetEl) return;
+    const box = (targetEl.querySelector && targetEl.querySelector('.modal')) || targetEl;
+    box.classList.remove('modal-nudge');
+    void box.offsetWidth; // 같은 애니메이션을 연속으로 다시 재생하려면 필요
+    box.classList.add('modal-nudge');
+    setTimeout(() => box.classList.remove('modal-nudge'), 450);
+    const old = document.querySelector('.nudge-hint');
+    if(old) old.remove();
+    const hint = document.createElement('div');
+    hint.className = 'nudge-hint';
+    hint.textContent = msg || '작성 중인 내용이 있어요 · 저장하거나 닫기를 눌러주세요';
+    document.body.appendChild(hint);
+    setTimeout(() => hint.remove(), 1800);
+  }
+  function backdropCloseModal(e){
+    if(e && e.target !== e.currentTarget) return;
+    if(isModalDirty()){ nudgeModal(e && e.currentTarget); return; }
+    closeModal();
+  }
+  function backdropCloseMemo(e){
+    if(e && e.target !== e.currentTarget) return;
+    if(journalMemoDirty){ nudgeModal(e && e.currentTarget); return; }
+    closeFloatingDetail();
+  }
+  function backdropCloseNewChannel(){
+    if((newChannelDraft || '').trim()){ nudgeModal(document.querySelector('.floating-panel'), '입력 중인 채널명이 있어요 · 추가하거나 취소를 눌러주세요'); return; }
+    closeFloatingDetail();
   }
   let confirmModal = null; // { message, type, payload, confirmLabel, threeWay }
   let floatingDetail = null; // { type:'setup', itemId } | { type:'memo', taskId } | { type:'newChannel', target:'form'|'review', idx } — 플로팅 패널 상태
@@ -3914,10 +4104,12 @@
     render();
   }
   function openSetupPreview(id){
+    closeOtherBigPopups('floating');
     floatingDetail = { type:'setup', itemId: id };
     render();
   }
   function openTaskMemo(taskId, isNew){
+    closeOtherBigPopups('floating');
     floatingDetail = { type:'memo', taskId };
     journalMemoDirty = false;
     journalMemoIsNew = !!isNew;
@@ -4002,6 +4194,7 @@
         id: newId, text: `${task.text} 후속 처리`, category:'todo', taskType:'todo', recurrence:null, done:false, doneDates:{},
         createdDate: dateKey, time:'', notes:'', dueDate:'', completedDate:null
       };
+      closeOtherBigPopups('floating');
       floatingDetail = { type:'memo', taskId: newId, draft };
       journalMemoDirty = false;
       journalMemoIsNew = true;
@@ -4753,7 +4946,27 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     return list;
   }
 
+  // 달력 선택창·더보기 메뉴 같은 "가벼운 팝업"은 큰 창(등록/수정, 메모, 확인창 등)과 절대 같이 떠 있지 않게 함.
+  // 어떤 경로로 큰 창이 열리든 render() 한 곳에서 같이 정리돼서, 새 창을 추가해도 겹침이 다시 생기지 않음
+  function isBigPopupOpen(){
+    return !!(modalState || floatingDetail || confirmModal || backupOpen || channelRenameOpen || channelManageOpen ||
+              storageSettingsOpen || globalSearchOpen || monthlyReportOpen || journalHolidayPickerOpen);
+  }
+  // 큰 창은 한 번에 하나만. 새 큰 창을 열기 직전에 나머지를 전부 닫음 (keep: 방금 열려는 창의 종류는 건드리지 않음)
+  // 일부러 겹치게 만든 것(확인창, 등록창 위의 "새 채널" 패널)은 이 함수를 거치지 않으니 그대로 위에 얹힘
+  function closeOtherBigPopups(keep){
+    if(keep !== 'modal') modalState = null;
+    if(keep !== 'floating') floatingDetail = null;
+    confirmModal = null;
+    backupOpen = false; channelRenameOpen = false; channelManageOpen = false;
+    storageSettingsOpen = false; globalSearchOpen = false; monthlyReportOpen = false;
+    if(keep !== 'holiday') journalHolidayPickerOpen = false;
+    closeLightPopups();
+  }
+  function isLightPopupOpen(){ return !!(journalDatePickerOpen || ganttDatePickerOpen || topMenuOpen); }
+  function closeLightPopups(){ journalDatePickerOpen = false; ganttDatePickerOpen = false; topMenuOpen = false; }
   function render(){
+    if(isBigPopupOpen()) closeLightPopups();
     saveViewState();
     const app = document.getElementById('app');
     const searchEl = document.getElementById('searchInput');
@@ -5734,12 +5947,14 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         const daysInMonth = new Date(year, month+1, 0).getDate();
         const monthLabel = `${year}. ${String(month+1).padStart(2,'0')}`;
         const isCurrentMonth = year === new Date().getFullYear() && month === new Date().getMonth();
-        html += `<div class="cal-header">
+        html += `<div class="cal-header has-holiday-btn" style="position:relative;">
           <button class="icon-btn" onclick="App.journalCalPrev()">‹</button>
           <div class="cal-month-label">${monthLabel}</div>
           <button class="icon-btn" onclick="App.journalCalNext()">›</button>
           <button class="btn btn-ghost journal-today-btn ${isCurrentMonth?'is-current':''}" style="margin-left:8px;" onclick="${isCurrentMonth ? '' : "App.journalCalGoToday()"}">오늘</button>
+          ${renderJournalHolidayButton('🏖️ 근무 상태')}
         </div>`;
+        if(journalHolidayPickerOpen) html += renderJournalHolidayModal();
         html += `<div class="cal-grid">`;
         ['일','월','화','수','목','금','토'].forEach(d => { html += `<div class="cal-dow">${d}</div>`; });
         for(let i=0; i<firstWeekday; i++){ html += `<div class="cal-cell cal-empty"></div>`; }
@@ -5770,13 +5985,15 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         const weekEnd = new Date(journalWeekAnchor.getFullYear(), journalWeekAnchor.getMonth(), journalWeekAnchor.getDate()+6);
         const fmtW = (d) => `${d.getMonth()+1}.${d.getDate()}`;
         const isCurrentWeek = toISO(journalWeekAnchor) === toISO(calcWeekStart(new Date()));
-        html += `<div class="cal-header" style="position:relative;">
+        html += `<div class="cal-header has-holiday-btn" style="position:relative;">
           <button class="icon-btn" onclick="App.journalWeekPrev()">‹</button>
           <div class="cal-month-label" style="cursor:pointer;" onclick="App.toggleJournalDatePicker()" title="날짜로 바로 이동">${fmtW(journalWeekAnchor)} - ${fmtW(weekEnd)}</div>
           <button class="icon-btn" onclick="App.journalWeekNext()">›</button>
           <button class="btn btn-ghost journal-today-btn ${isCurrentWeek?'is-current':''}" style="margin-left:8px;" onclick="${isCurrentWeek ? '' : "App.journalWeekGoToday()"}">오늘</button>
+          ${renderJournalHolidayButton('🏖️ 근무 상태')}
           ${journalDatePickerOpen ? renderMiniDatePicker() : ''}
         </div>`;
+        if(journalHolidayPickerOpen) html += renderJournalHolidayModal();
         html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <span class="journal-done-toggle" style="margin-bottom:0;" onclick="App.toggleJournalWeekShowWeekends()">${journalWeekShowWeekends ? '▾ 주말 숨기기' : '▸ 주말도 보기'}</span>
           <button type="button" class="btn btn-ghost" style="padding:5px 10px;font-size:11.5px;" onclick="App.addJournalTaskAtTime('${todayISO()}', '${nowSnappedTimeStr()}')">+ 일정 추가</button>
@@ -5829,26 +6046,10 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         <div class="journal-date ${dObj.getDay()===0?'is-sunday':''} ${dObj.getDay()===6?'is-saturday':''}" style="cursor:pointer;" onclick="App.toggleJournalDatePicker()" title="날짜로 바로 이동">${dateLabel}</div>
         <button class="icon-btn" onclick="App.journalShiftDay(1)">›</button>
         <button class="btn btn-ghost journal-today-btn ${isToday?'is-current':''}" onclick="${isToday ? '' : "App.journalGoToday()"}">오늘</button>
-        <div class="journal-holiday-wrap">
-          <button type="button" class="btn btn-ghost journal-holiday-btn" onclick="event.stopPropagation();App.toggleJournalHolidayPicker()">${currentHolidayOpt.icon} ${(holidayInfo && holidayInfo.type==='public' && holidayInfo.label) ? escapeHtml(holidayInfo.label) : currentHolidayOpt.label} ▾</button>
-        </div>
+        ${renderJournalHolidayButton(`${currentHolidayOpt.icon} ${(holidayInfo && holidayInfo.type==='public' && holidayInfo.label) ? escapeHtml(holidayInfo.label) : currentHolidayOpt.label}`)}
         ${journalDatePickerOpen ? renderMiniDatePicker() : ''}
       </div>`;
-      if(journalHolidayPickerOpen){
-        // 코너에 뜨는 팝오버 대신, 앱에 이미 있는 모달(가운데+배경 어두워짐) 방식을 그대로 씀 —
-        // "이건 원래 위에 뜨는 거구나"가 명확해서 뭘 가리는지 신경 안 써도 됨
-        html += `
-          <div class="overlay" onclick="if(event.target===this) App.toggleJournalHolidayPicker();">
-            <div class="modal" style="max-width:360px;">
-              <h2 class="modal-title">이 날의 근무 상태</h2>
-              <div class="journal-holiday-pills">
-                ${HOLIDAY_OPTS.map(o => `<span class="journal-holiday-pill ${o.value===currentHolidayOpt.value?'active':''}" onclick="App.setJournalHoliday('${jd}', '${o.value}');App.toggleJournalHolidayPicker();">${o.icon} ${o.label}</span>`).join('')}
-              </div>
-              <button type="button" class="btn btn-ghost" style="width:100%;margin-top:18px;" onclick="App.toggleJournalHolidayPicker()">닫기</button>
-            </div>
-          </div>
-        `;
-      }
+      if(journalHolidayPickerOpen) html += renderJournalHolidayModal();
 
       // 오늘 요약 — 스크롤 안 해도 오늘 급한 것/미팅/완료 현황이 한눈에 보이게
       const summaryUrgentCount = tasksForDate(jd, 'todo').filter(isTaskUrgentToday).length + tasksForDate(jd, 'issue').filter(isTaskUrgentToday).length;
@@ -5988,7 +6189,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     if(modalState){
       const f = modalState.form;
       html += `
-        <div class="overlay" onclick="if(event.target===this) App.closeModal()">
+        <div class="overlay" onclick="App.backdropCloseModal(event)">
           <div class="modal">
             <h2 class="modal-title">${modalState.mode==='add' ? (modalState.tab==='review' ? '추출된 내용 확인' : '새 항목 등록') : '프로모션 수정'}</h2>
       `;
@@ -6575,7 +6776,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
 
     if(confirmModal){
       html += `
-        <div class="overlay" onclick="if(event.target===this) App.chooseConfirm('cancel')">
+        <div class="overlay" style="z-index:80;" onclick="if(event.target===this) App.chooseConfirm('cancel')">
           <div class="modal confirm-modal">
             <p class="confirm-message">${escapeHtml(confirmModal.message)}</p>
             <div class="modal-footer">
@@ -6642,7 +6843,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         const memoDdayInfo = memoLinkedItem ? journalLinkedDdayInfo(memoLinkedItem, memoTask.linkedType) : null;
         const memoRecurType = memoTask.recurrence ? memoTask.recurrence.type : 'none';
         html += `
-          <div class="overlay" onclick="if(event.target===this) App.closeFloatingDetail();">
+          <div class="overlay" onclick="App.backdropCloseMemo(event)">
           <div class="modal memo-modal" style="position:relative;max-width:420px;">
             <div class="floating-panel-close" onclick="App.closeFloatingDetail()">✕</div>
             ${!memoTask.linkedItemId ? `
@@ -6732,7 +6933,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       }
     }else if(floatingDetail && floatingDetail.type === 'newChannel'){
       html += `
-        <div class="floating-backdrop" onclick="App.closeFloatingDetail()"></div>
+        <div class="floating-backdrop" onclick="App.backdropCloseNewChannel()"></div>
         <div class="floating-panel">
           <div class="floating-panel-close" onclick="App.closeFloatingDetail()">✕</div>
           <div class="setup-preview-title" style="margin-bottom:10px;">+ 새 채널 추가</div>
@@ -6745,7 +6946,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       `;
     }
 
-    if(!modalState && !backupOpen && !channelRenameOpen && !channelManageOpen && !confirmModal && !floatingDetail && !storageSettingsOpen && !globalSearchOpen && !monthlyReportOpen){
+    if(!isBigPopupOpen()){
       html += `<button class="fab-add" onclick="App.openAdd()" title="새 공지 등록">+</button>`;
     }
 
@@ -6876,6 +7077,8 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     journalShiftDay,
     journalGoToday,
     setJournalHoliday,
+    setHolidayRangeStart, setHolidayRangeEnd, toggleHolidaySkip, applyJournalHolidayRange, resetJournalHolidayAuto,
+    backdropCloseModal, backdropCloseMemo, backdropCloseNewChannel,
     setJournalViewMode,
     journalCalGoToday,
     journalCalPrev,
@@ -7022,9 +7225,18 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
   loadItems();
   setInterval(() => { render(); checkUpcomingTaskReminders(); }, 60000); // refresh once per minute so D-DAY countdowns stay current; set once here, never re-created
 
+  // 달력 선택창·더보기 메뉴: 바깥을 누르면 닫힘 (여는 버튼/팝업 안쪽 클릭은 제외)
+  document.addEventListener('click', function(e){
+    if(!isLightPopupOpen()) return;
+    if(e.target.closest && e.target.closest('.mini-datepicker, .top-menu-dropdown, .cal-month-label, [onclick*="toggleTopMenu"], [onclick*="DatePicker"]')) return;
+    closeLightPopups();
+    render();
+  });
+
   // ESC로 열려있는 팝업/모달 닫기 — 여러 개 겹쳐있을 수 있으니 제일 위에 뜬 것부터 순서대로 확인
   document.addEventListener('keydown', function(e){
     if(e.key !== 'Escape') return;
+    if(isLightPopupOpen() && !isBigPopupOpen()){ closeLightPopups(); render(); return; }
     if(confirmModal){ chooseConfirm('cancel'); return; }
     if(floatingDetail){ closeFloatingDetail(); return; }
     if(modalState){ closeModal(); return; }
@@ -7034,6 +7246,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     if(storageSettingsOpen){ storageSettingsOpen = false; render(); return; }
     if(globalSearchOpen){ globalSearchOpen = false; render(); return; }
     if(monthlyReportOpen){ monthlyReportOpen = false; render(); return; }
+    if(journalHolidayPickerOpen){ journalHolidayPickerOpen = false; render(); return; }
   });
 
   // 타이핑 멈추고 0.6초 뒤 저장되는 디바운스 방식이라, 그 틈에 바로 탭을 닫으면 마지막 몇 글자가 유실될 수 있음 —
