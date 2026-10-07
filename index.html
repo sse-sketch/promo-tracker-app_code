@@ -404,8 +404,17 @@
   .gantt-week:nth-child(odd){background:var(--surface-2);}
   .gantt-daynum{font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);padding:3px 0 3px 4px;font-weight:600;}
   .gantt-daynum.gantt-dim{color:#C9CEC6;}
+  .gantt-daynum{display:flex;align-items:center;gap:4px;min-width:0;}
+  .gantt-daynum.is-sunday, .gantt-daynum.is-holiday{color:var(--urgent);}
+  .gantt-daynum.is-saturday{color:#3B6BC9;}
+  .gantt-daynum.is-holiday{font-weight:800;}
+  .gantt-daynum.gantt-dim.is-sunday, .gantt-daynum.gantt-dim.is-holiday{color:#E3B9B4;}
+  .gantt-daynum.gantt-dim.is-saturday{color:#B7C8E8;}
+  .gantt-holiday-name{font-size:9px;font-weight:700;color:var(--urgent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+  .gantt-daynum.gantt-dim .gantt-holiday-name{color:#E3B9B4;}
   .gantt-daynum.gantt-today{color:#fff;background:var(--brand);border-radius:999px;width:20px;height:20px;
     display:flex;align-items:center;justify-content:center;padding:0;font-weight:700;}
+  .gantt-daynum.gantt-today .gantt-holiday-name{display:none;}
   .gantt-bar{
     font-size:10.5px;font-weight:700;color:#fff;border-radius:6px;padding:3px 8px;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;align-self:center;
@@ -743,6 +752,32 @@
     font-size:13.5px;font-family:var(--sans);color:var(--ink);background:var(--surface);resize:vertical;
   }
   .journal-memo-textarea:focus{outline:none;border-color:var(--brand);}
+  /* 메모 팝업 컴팩트 레이아웃 */
+  .memo-modal{padding:18px 20px !important;}
+  .memo-modal .journal-kind-picker{margin-bottom:8px;padding-right:22px;}
+  .memo-modal .journal-type-chip{padding:5px 9px;}
+  .memo-title-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+  .memo-meta-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px;}
+  .memo-date-input{font-family:var(--sans);font-size:13px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface);color:var(--ink);flex:0 0 auto;width:140px;}
+  .memo-toggle{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;color:var(--ink-soft);padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);cursor:pointer;white-space:nowrap;user-select:none;}
+  .memo-toggle input[type=checkbox]{width:14px;height:14px;accent-color:var(--brand);cursor:pointer;margin:0;}
+  .memo-toggle.is-on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand);}
+  .memo-followup-strip{display:flex;gap:6px;align-items:center;margin-bottom:8px;padding:6px 8px;background:var(--surface-2);border-radius:10px;font-size:12px;font-weight:700;color:var(--ink-soft);}
+  .memo-followup-strip .memo-date-input{width:132px;padding:5px 7px;}
+  .memo-followup-strip .journal-time-input{flex:0 0 auto;width:86px;border-color:var(--line);background:var(--surface);padding:6px 4px;}
+  .memo-modal .journal-memo-edit-row{margin-bottom:8px;gap:6px;}
+  .memo-modal .journal-memo-edit-row .journal-time-input{flex:0 0 78px;padding:6px 2px;}
+  .memo-modal .journal-memo-edit-row .journal-recur-select{flex:1;min-width:0;padding:6px;}
+  .memo-modal .journal-recur-day-picker{margin:0 0 8px;}
+  .memo-inline-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+  .memo-inline-row > label{font-size:12px;font-weight:700;color:var(--ink-soft);flex:0 0 auto;cursor:help;}
+  .memo-inline-row > input[type=date]{font-family:var(--sans);font-size:13px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface);color:var(--ink);width:140px;}
+  .memo-inline-row .memo-inline-hint{font-size:11px;color:var(--ink-faint);}
+  .memo-modal .journal-recur-until-row{margin:0 0 8px;display:flex;gap:8px;align-items:center;}
+  .memo-modal .journal-recur-until-row label{margin:0;white-space:nowrap;}
+  .memo-modal .journal-memo-textarea{min-height:72px;padding:9px 11px;}
+  .memo-modal .journal-memo-due{margin-bottom:8px;}
+  .memo-footer{display:flex;gap:8px;align-items:center;margin-top:10px;}
   @media (max-width:480px){
     .floating-panel{left:16px;right:16px;width:auto;bottom:90px;}
   }
@@ -1417,6 +1452,7 @@
   }
   function doRestoreSnapshot(parsed){
     items = parsed.items || [];
+    migrateChannelAliases();
     journalEntries = parsed.journalEntries || {};
     journalTasks = parsed.journalTasks || [];
     floatingDetail = null;
@@ -1651,7 +1687,7 @@
       showToast('변경할 채널과 새 이름을 입력해주세요');
       return;
     }
-    const targetName = renameTo.trim();
+    const targetName = normalizeChannelName(renameTo);
     const count = items.filter(i => i.channel === renameFrom).length;
     if(count === 0){
       showToast('해당 채널의 항목이 없어요');
@@ -1917,7 +1953,9 @@
     for(let d=1; d<=daysInMonth; d++){
       const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       const isToday = dateStr === todayISO();
-      html += `<div class="cal-cell mini-cal-cell ${isToday?'is-today':''}" onclick="App.pickGanttDate('${dateStr}')">
+      const cellDow = new Date(year, month, d).getDay();
+      const cellHoliday = getEffectiveHoliday(dateStr);
+      html += `<div class="cal-cell mini-cal-cell ${isToday?'is-today':''} ${cellDow===0?'is-sunday':''} ${cellDow===6?'is-saturday':''} ${cellHoliday?'is-holiday':''}" onclick="App.pickGanttDate('${dateStr}')" title="${cellHoliday?escapeHtml(cellHoliday.label):''}">
         <div class="cal-daynum">${d}</div>
       </div>`;
     }
@@ -2264,6 +2302,35 @@
     if(isChecklistComplete(item)) return false; // 체크리스트를 이미 다 마쳤으면 더 이상 '준비 필요' 목록에 안 뜸
     return true;
   }
+  // 같은 채널을 다르게 적어도 하나로 인식 — 예: "마켓컬리", "마켓 컬리", "Market Kurly" → "컬리"
+  const CHANNEL_ALIASES = {
+    '마켓컬리': '컬리',
+    'marketkurly': '컬리',
+    'kurly': '컬리'
+  };
+  function normalizeChannelName(name){
+    const t = (name == null ? '' : String(name)).trim();
+    if(!t) return '';
+    const key = t.replace(/[\s_\-]+/g, '').toLowerCase();
+    return CHANNEL_ALIASES[key] || t;
+  }
+  // 이미 저장돼 있는 데이터(항목 채널명, 채널 목록, 종료 채널)도 한 번에 정리. 바뀐 게 있으면 true
+  function migrateChannelAliases(){
+    let changed = false;
+    items.forEach(i => {
+      const n = normalizeChannelName(i.channel);
+      if(i.channel && n !== i.channel){ i.channel = n; changed = true; }
+    });
+    const fixList = list => {
+      const out = [];
+      list.forEach(c => { const n = normalizeChannelName(c); if(n && !out.includes(n)) out.push(n); });
+      if(out.length !== list.length || out.some((c,k) => c !== list[k])) changed = true;
+      return out;
+    };
+    managedChannels = fixList(managedChannels);
+    endedChannels = fixList(endedChannels);
+    return changed;
+  }
   const CHANNEL_COLOR_MAP = {
     '컬리': { bg:'#F1E9F8', text:'#5B2A86' },
     '지그재그': { bg:'#FDE6F0', text:'#D6006D' },
@@ -2470,6 +2537,9 @@
       if(jtRes && jtRes.value) journalTasks = JSON.parse(jtRes.value);
     }catch(e){
       journalTasks = [];
+    }
+    if(migrateChannelAliases()){
+      persist(); persistManagedChannels(); persistEndedChannels();
     }
     // 구버전(날짜별 issues/todo 텍스트 배열)이 남아있으면 1회성 태스크로 옮겨줌 (하위호환)
     let migrated = false;
@@ -3753,6 +3823,7 @@
       if(ecRes && ecRes.value) endedChannels = JSON.parse(ecRes.value);
       if(jRes && jRes.value) journalEntries = JSON.parse(jRes.value);
       if(jtRes && jtRes.value) journalTasks = JSON.parse(jtRes.value);
+      if(migrateChannelAliases()){ persist(); persistManagedChannels(); persistEndedChannels(); }
     }catch(e){
       // ignore — just re-render with whatever is in memory
     }
@@ -3827,7 +3898,7 @@
     newChannelDraft = value;
   }
   async function confirmNewChannel(){
-    const name = newChannelDraft.trim();
+    const name = normalizeChannelName(newChannelDraft);
     if(!name) return;
     if(!managedChannels.includes(name)){
       managedChannels.push(name);
@@ -4207,7 +4278,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       const taskRows = parsed.filter(p => p.kind === 'todo' || p.kind === 'issue');
       if(promoRows.length === 0 && taskRows.length === 0) throw new Error('추출된 항목이 없어요.');
       modalState.reviewItems = promoRows.map(p => ({
-        channel: p.channel || '',
+        channel: normalizeChannelName(p.channel),
         title: p.title || '',
         period: p.period || '',
         content: p.content || '',
@@ -4284,7 +4355,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       render();
       return;
     }
-    const dupCount = rows.filter(r => findDuplicate(r.channel.trim(), r.title || r.content, r.deadline, null)).length;
+    const dupCount = rows.filter(r => findDuplicate(normalizeChannelName(r.channel), r.title || r.content, r.deadline, null)).length;
     if(dupCount > 0){
       confirmModal = { message: `${dupCount}건이 이미 등록된 항목과 비슷해 보여요 (채널·제목·마감일 일치).\n그래도 전부 새로 등록할까요?`, type: 'reviewDup', payload: { rows, taskRows }, confirmLabel: '그래도 등록' };
       render();
@@ -4298,7 +4369,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     rows.forEach(r => {
       items.push({
         id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
-        channel: r.channel.trim(),
+        channel: normalizeChannelName(r.channel),
         title: (r.title||'').trim(),
         period: normalizePeriod(r.period.trim(), +(r.deadline||'').split('-')[0] || new Date().getFullYear()),
         content: r.content.trim(),
@@ -4366,9 +4437,10 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       return;
     }
     if(modalState.mode === 'add'){
-      const dup = findDuplicate(f.channel.trim(), f.title || f.content, f.deadline, null);
+      f.channel = normalizeChannelName(f.channel);
+      const dup = findDuplicate(f.channel, f.title || f.content, f.deadline, null);
       const newFields = {
-        channel: f.channel.trim(),
+        channel: f.channel,
         title: (f.title||'').trim(),
         period: normalizePeriod(f.period.trim(), +(f.deadline||'').split('-')[0] || new Date().getFullYear()),
         content: f.content.trim(),
@@ -4421,7 +4493,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
           item.history.push({ date: todayISO(), changes: changeNotes });
         }
 
-        item.channel = f.channel.trim();
+        item.channel = normalizeChannelName(f.channel);
         item.title = (f.title||'').trim();
         item.period = newPeriod;
         item.content = f.content.trim();
@@ -4518,7 +4590,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
   };
   // 채널에 등록된 템플릿이 없으면 공통 기본 리스트로 폴백
   function getSetupTemplateTasks(channel, setupType){
-    const tpl = CHANNEL_SETUP_TEMPLATES[(channel||'').trim()];
+    const tpl = CHANNEL_SETUP_TEMPLATES[normalizeChannelName(channel)];
     if(!tpl) return DEFAULT_SETUP_TASKS.slice();
     if(tpl.subtypes && tpl.subtypes.length){
       const key = (setupType && tpl.subtypes.includes(setupType)) ? setupType : tpl.subtypes[0];
@@ -4528,7 +4600,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
   }
   // 채널에 세부 유형이 있으면 폼에 선택된 값(또는 첫번째 유형)으로 확정, 없으면 undefined
   function resolveEffectiveSetupType(channel, setupType){
-    const tpl = CHANNEL_SETUP_TEMPLATES[(channel||'').trim()];
+    const tpl = CHANNEL_SETUP_TEMPLATES[normalizeChannelName(channel)];
     if(tpl && tpl.subtypes && tpl.subtypes.length){
       return (setupType && tpl.subtypes.includes(setupType)) ? setupType : tpl.subtypes[0];
     }
@@ -4548,7 +4620,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     if(!modalState || !modalState.form) return;
     const f = modalState.form;
     if(f.setupTasks && f.setupTasks.length) return;
-    const channelKey = (f.channel||'').trim();
+    const channelKey = normalizeChannelName(f.channel);
     if(!CHANNEL_SETUP_TEMPLATES[channelKey]) return;
     f.setupTasks = getSetupTemplateTasks(f.channel, f.setupType).map(label => ({id:null, label, done:false}));
   }
@@ -4599,7 +4671,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       if(it.setupTasks === undefined){
         it.setupTasks = getSetupTemplateTasks(it.channel, it.setupType).map(makeTaskObj);
         changed = true;
-      }else if(CHANNEL_SETUP_TEMPLATES[(it.channel||'').trim()] && isUntouchedLegacyChecklist(it.setupTasks)){
+      }else if(CHANNEL_SETUP_TEMPLATES[normalizeChannelName(it.channel)] && isUntouchedLegacyChecklist(it.setupTasks)){
         const correctTemplate = getSetupTemplateTasks(it.channel, it.setupType);
         const alreadyCorrect = correctTemplate.length === it.setupTasks.length && correctTemplate.every((label, i) => it.setupTasks[i].label === label);
         if(!alreadyCorrect){
@@ -4811,7 +4883,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
             <p class="card-title">${escapeHtml(item.title || item.content)}</p>
             <div class="setup-board-progress">
               ${total ? `${doneCount}/${total} 완료 ${allDone ? '✅' : ''}` : '체크리스트 없음'}
-              ${CHANNEL_SETUP_TEMPLATES[(item.channel||'').trim()] ? `<span class="section-label-action" style="margin-left:8px;" onclick="App.resetItemSetupTasksToTemplate('${item.id}')">🔄 채널 템플릿으로 다시 채우기</span>` : ''}
+              ${CHANNEL_SETUP_TEMPLATES[normalizeChannelName(item.channel)] ? `<span class="section-label-action" style="margin-left:8px;" onclick="App.resetItemSetupTasksToTemplate('${item.id}')">🔄 채널 템플릿으로 다시 채우기</span>` : ''}
             </div>
             <div class="setup-board-tasks">
               ${tasks.map(t => `
@@ -5405,6 +5477,8 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
           const dayItems = byDate[dateStr] || [];
           const isToday = dateStr === todayISO();
           const isSelected = dateStr === selectedDate;
+          const cellDow = new Date(year, month, d).getDay();
+          const cellHoliday = getEffectiveHoliday(dateStr);
           let dots = '';
           dayItems.slice(0,3).forEach(it => {
             const pend = (it.status||'pending') === 'pending';
@@ -5414,7 +5488,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
           if(dayItems.length > 3){
             dots += `<span class="cal-dot-more">+${dayItems.length-3}</span>`;
           }
-          html += `<div class="cal-cell ${isToday?'is-today':''} ${isSelected?'is-selected':''} ${dayItems.length?'has-items':''}" ${dayItems.length ? `onclick="App.selectDate('${dateStr}')"` : ''}>
+          html += `<div class="cal-cell ${isToday?'is-today':''} ${isSelected?'is-selected':''} ${dayItems.length?'has-items':''} ${cellDow===0?'is-sunday':''} ${cellDow===6?'is-saturday':''} ${cellHoliday?'is-holiday':''}" ${dayItems.length ? `onclick="App.selectDate('${dateStr}')"` : ''} title="${cellHoliday?escapeHtml(cellHoliday.label):''}">
             <div class="cal-daynum">${d}</div>
             <div class="cal-dots">${dots}</div>
           </div>`;
@@ -5582,7 +5656,9 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
             const dStr = toISO(d);
             const inMonth = d.getMonth() === month;
             const isToday = dStr === todayISO();
-            html += `<div class="gantt-daynum ${inMonth?'':'gantt-dim'} ${isToday?'gantt-today':''}" style="grid-column:${idx+1};grid-row:1;">${d.getDate()}</div>`;
+            const gHoliday = getEffectiveHoliday(dStr);
+            const gDow = d.getDay();
+            html += `<div class="gantt-daynum ${inMonth?'':'gantt-dim'} ${isToday?'gantt-today':''} ${gDow===0?'is-sunday':''} ${gDow===6?'is-saturday':''} ${gHoliday?'is-holiday':''}" style="grid-column:${idx+1};grid-row:1;" title="${gHoliday?escapeHtml(gHoliday.label):''}"><span>${d.getDate()}</span>${gHoliday ? `<span class="gantt-holiday-name">${escapeHtml(gHoliday.label)}</span>` : ''}</div>`;
           });
           ganttItems.forEach(it => {
             if(it._end < weekStartStr || it._start > weekEndStr) return;
@@ -5949,7 +6025,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                 <button class="icon-btn danger" title="삭제" onclick="App.removeReviewItem(${idx})">✕</button>
               </div>
               ${(() => {
-                const tpl = CHANNEL_SETUP_TEMPLATES[(r.channel||'').trim()];
+                const tpl = CHANNEL_SETUP_TEMPLATES[normalizeChannelName(r.channel)];
                 if(!tpl || !tpl.subtypes || !tpl.subtypes.length) return '';
                 const current = (r.setupType && tpl.subtypes.includes(r.setupType)) ? r.setupType : tpl.subtypes[0];
                 return `
@@ -6148,7 +6224,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
             <textarea placeholder="예: 바디케어/구강케어만 참여 가능" oninput="App.updateField('notes', this.value)">${escapeHtml(f.notes||'')}</textarea>
           </div>
           ${(() => {
-            const tpl = CHANNEL_SETUP_TEMPLATES[(f.channel||'').trim()];
+            const tpl = CHANNEL_SETUP_TEMPLATES[normalizeChannelName(f.channel)];
             if(!tpl || !tpl.subtypes || !tpl.subtypes.length) return '';
             const current = (f.setupType && tpl.subtypes.includes(f.setupType)) ? f.setupType : tpl.subtypes[0];
             return `
@@ -6179,7 +6255,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
             ` : `<div class="hint" style="margin-bottom:8px;">아직 등록된 체크리스트 항목이 없어요.</div>`}
             <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
               <button type="button" class="btn btn-ghost" style="padding:8px 12px;font-size:12.5px;" onclick="App.addSetupTaskRow()">+ 항목 추가</button>
-              <button type="button" class="btn btn-ghost" style="padding:8px 12px;font-size:12.5px;" onclick="App.addDefaultSetupTasks()">${CHANNEL_SETUP_TEMPLATES[(f.channel||'').trim()] ? '채널 기본 항목 채우기' : '기본 항목 채우기'}</button>
+              <button type="button" class="btn btn-ghost" style="padding:8px 12px;font-size:12.5px;" onclick="App.addDefaultSetupTasks()">${CHANNEL_SETUP_TEMPLATES[normalizeChannelName(f.channel)] ? '채널 기본 항목 채우기' : '기본 항목 채우기'}</button>
               ${(modalState.setupTaskSelected||[]).length ? `<button type="button" class="btn-text-danger" style="padding:8px 12px;font-size:12.5px;" onclick="App.deleteSelectedSetupTasks()">선택 삭제 (${modalState.setupTaskSelected.length})</button>` : ''}
             </div>
           </div>
@@ -6567,56 +6643,45 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         const memoRecurType = memoTask.recurrence ? memoTask.recurrence.type : 'none';
         html += `
           <div class="overlay" onclick="if(event.target===this) App.closeFloatingDetail();">
-          <div class="modal" style="position:relative;max-width:420px;">
+          <div class="modal memo-modal" style="position:relative;max-width:420px;">
             <div class="floating-panel-close" onclick="App.closeFloatingDetail()">✕</div>
             ${!memoTask.linkedItemId ? `
               <div class="journal-kind-picker">
                 <span class="journal-type-chip ${memoTask.category==='todo'&&(!memoTask.taskType||memoTask.taskType==='todo')?'journal-type-chip-active':''}" onclick="App.setJournalTaskKind('${memoTask.id}', 'todo')">📌 할일</span>
                 <span class="journal-type-chip ${memoTask.category==='todo'&&memoTask.taskType==='meeting'?'journal-type-chip-active':''}" onclick="App.setJournalTaskKind('${memoTask.id}', 'meeting')">🗣️ 미팅</span>
                 <span class="journal-type-chip ${memoTask.category==='todo'&&memoTask.taskType==='proposal'?'journal-type-chip-active':''}" onclick="App.setJournalTaskKind('${memoTask.id}', 'proposal')">💡 제안</span>
-
                 <span class="journal-type-chip ${memoTask.category==='issue'?'journal-type-chip-active journal-type-chip-issue':''}" onclick="App.setJournalTaskKind('${memoTask.id}', 'issue')">👀 팔로우업</span>
               </div>
-              <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+              <div class="memo-title-row">
                 <span class="star-toggle ${memoTask.starred?'is-starred':''}" style="cursor:pointer;flex-shrink:0;" onclick="App.toggleJournalTaskStar('${memoTask.id}')" title="중요 표시">${memoTask.starred?'★':'☆'}</span>
                 <input type="text" class="journal-memo-title-input" style="margin-bottom:0;flex:1;" value="${escapeHtml(memoTask.text)}" placeholder="내용" oninput="App.updateJournalTaskText('${memoTask.id}', this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();App.saveJournalMemoNow();}" autofocus />
               </div>
-              <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px;">
-                <div class="journal-memo-due" style="flex:0 0 150px;margin-bottom:0;">
-                  <label>날짜</label>
-                  <input type="date" value="${escapeHtml(memoTask.createdDate||journalDate)}" onchange="App.updateJournalTaskCreatedDate('${memoTask.id}', this.value)" />
-                </div>
+              <div class="memo-meta-row">
+                <input type="date" class="memo-date-input" title="날짜" value="${escapeHtml(memoTask.createdDate||journalDate)}" onchange="App.updateJournalTaskCreatedDate('${memoTask.id}', this.value)" />
                 ${(!memoTask.recurrence && !journalMemoIsNew) ? `
-                  <label class="journal-memo-done-row" style="flex:1;margin-bottom:0;padding-bottom:8px;">
+                  <label class="memo-toggle ${memoTask.done?'is-on':''}">
                     <input type="checkbox" ${memoTask.done?'checked':''} onchange="App.toggleJournalTaskDone('${memoTask.id}', '${journalDate}')" />
-                    완료 처리
+                    완료
+                  </label>
+                  <label class="memo-toggle ${floatingDetail.wantsFollowup?'is-on':''}">
+                    <input type="checkbox" ${floatingDetail.wantsFollowup?'checked':''} onchange="App.toggleJournalFollowupWanted()" />
+                    + 후속업무
                   </label>
                 ` : ''}
               </div>
-              ${(!memoTask.recurrence && !journalMemoIsNew && !memoTask.linkedItemId) ? `
-                <label class="journal-memo-done-row" style="margin-bottom:${floatingDetail.wantsFollowup?'8px':'14px'};">
-                  <input type="checkbox" ${floatingDetail.wantsFollowup?'checked':''} onchange="App.toggleJournalFollowupWanted()" />
-                  + 후속업무 필요
-                </label>
-                ${floatingDetail.wantsFollowup ? `
-                  <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px;padding:10px;background:var(--surface-2);border-radius:10px;">
-                    <div class="journal-memo-due" style="flex:0 0 150px;margin-bottom:0;">
-                      <label>후속업무 날짜</label>
-                      <input type="date" value="${escapeHtml(floatingDetail.followupDate||memoTask.createdDate||journalDate)}" onchange="App.updateJournalFollowupDate(this.value)" />
-                    </div>
-                    <div style="flex:1;">
-                      <label style="display:block;font-size:12px;color:var(--ink-faint);margin-bottom:4px;">시각</label>
-                      <select class="journal-time-input" style="width:100%;" onchange="App.updateJournalFollowupTime(this.value)" title="후속업무 시작 시각">${timeSelectOptions(floatingDetail.followupTime)}</select>
-                    </div>
-                  </div>
-                ` : ''}
+              ${(!memoTask.recurrence && !journalMemoIsNew && floatingDetail.wantsFollowup) ? `
+                <div class="memo-followup-strip">
+                  <span>↳ 후속</span>
+                  <input type="date" class="memo-date-input" value="${escapeHtml(floatingDetail.followupDate||memoTask.createdDate||journalDate)}" onchange="App.updateJournalFollowupDate(this.value)" title="후속업무 날짜" />
+                  <select class="journal-time-input" onchange="App.updateJournalFollowupTime(this.value)" title="후속업무 시작 시각">${timeSelectOptions(floatingDetail.followupTime)}</select>
+                </div>
               ` : ''}
               <div class="journal-memo-edit-row">
                 <select class="journal-time-input" onchange="App.updateJournalTaskTime('${memoTask.id}', this.value)" title="시작 시각">${timeSelectOptions(memoTask.time)}</select>
-                <span style="color:var(--ink-faint);">~</span>
+                <span style="color:var(--ink-faint);align-self:center;">~</span>
                 <select class="journal-time-input" onchange="App.updateJournalTaskEndTime('${memoTask.id}', this.value)" title="종료 시각(시간표에 길이로 표시돼요)">${timeSelectOptions(memoTask.endTime)}</select>
                 <select class="journal-recur-select" onchange="App.setJournalTaskRecurrence('${memoTask.id}', this.value)" title="반복 설정">
-                  <option value="none" ${memoRecurType==='none'?'selected':''}>안함</option>
+                  <option value="none" ${memoRecurType==='none'?'selected':''}>반복 안함</option>
                   <option value="daily" ${memoRecurType==='daily'?'selected':''}>매일(평일)</option>
                   <option value="weekly" ${memoRecurType==='weekly'?'selected':''}>매주(같은 요일)</option>
                   <option value="monthly" ${memoRecurType==='monthly'?'selected':''}>매월(같은 날짜)</option>
@@ -6633,17 +6698,19 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
               ` : ''}
               ${memoRecurType!=='none' ? `
                 <div class="journal-recur-until-row">
-                  <label>반복 종료일 <span style="font-weight:400;color:var(--ink-faint);">(선택 — 안 정하면 계속 반복)</span></label>
+                  <label title="안 정하면 계속 반복돼요">반복 종료일</label>
                   <input type="date" value="${escapeHtml(memoTask.recurrence.until||'')}" oninput="App.updateJournalTaskRecurUntil('${memoTask.id}', this.value)" />
+                  <span class="memo-inline-hint">(선택)</span>
                 </div>
               ` : ''}
             ` : `
               <div class="setup-preview-title" style="margin-bottom:10px;">📝 ${escapeHtml(memoTask.text || '(내용 없음)')}</div>
             `}
             ${!memoTask.linkedItemId ? `
-              <div class="journal-memo-due">
-                <label>마감일 <span style="font-weight:400;color:var(--ink-faint);">(선택 — 넘기면 목록에 D-day로 표시돼요)</span></label>
+              <div class="memo-inline-row">
+                <label title="선택 — 넘기면 목록에 D-day로 표시돼요">마감일</label>
                 <input type="date" value="${escapeHtml(memoTask.dueDate||'')}" oninput="App.updateJournalTaskDueDate('${memoTask.id}', this.value)" />
+                <span class="memo-inline-hint">(선택 · D-day 표시)</span>
               </div>
             ` : (memoDdayInfo ? `
               <div class="journal-memo-due">
@@ -6651,13 +6718,12 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                 <span class="dday-mini dday-${urgencyClass(memoDdayInfo.n)}">${ddayLabel(memoDdayInfo.n)}</span>
               </div>
             ` : '')}
-            <textarea class="journal-memo-textarea" placeholder="상세 내용, 참고사항 등을 자유롭게 적어두세요" oninput="App.updateJournalTaskNotes('${memoTask.id}', this.value)">${escapeHtml(memoTask.notes||'')}</textarea>
-            <div class="hint" style="margin-top:8px;color:var(--ink-faint);">이 안에서 바꾼 내용은 "저장" 버튼을 눌러야 한번에 반영돼요</div>
-            <div style="display:flex;gap:8px;margin-top:10px;">
-              <button type="button" class="btn btn-ghost" style="flex:1;padding:9px 16px;font-size:13px;" onclick="App.closeFloatingDetail()">닫기</button>
-              <button type="button" class="btn ${journalMemoDirty ? 'btn-primary' : 'btn-ghost'}" style="flex:1;padding:9px 16px;font-size:13px;" onclick="App.saveJournalMemoNow()">${journalMemoDirty ? '● 저장' : '저장'}</button>
+            <textarea class="journal-memo-textarea" rows="3" placeholder="상세 내용, 참고사항 등을 자유롭게 적어두세요" oninput="App.updateJournalTaskNotes('${memoTask.id}', this.value)">${escapeHtml(memoTask.notes||'')}</textarea>
+            <div class="memo-footer">
+              <button type="button" class="btn-text-danger" style="margin-right:auto;" onclick="App.deleteJournalTaskFromMemo()">삭제</button>
+              <button type="button" class="btn btn-ghost" style="padding:8px 16px;font-size:13px;" onclick="App.closeFloatingDetail()">닫기</button>
+              <button type="button" class="btn ${journalMemoDirty ? 'btn-primary' : 'btn-ghost'}" style="padding:8px 20px;font-size:13px;" title="이 안에서 바꾼 내용은 저장을 눌러야 한번에 반영돼요" onclick="App.saveJournalMemoNow()">${journalMemoDirty ? '● 저장' : '저장'}</button>
             </div>
-            <button type="button" class="btn-text-danger" style="width:100%;margin-top:6px;" onclick="App.deleteJournalTaskFromMemo()">삭제</button>
           </div>
           </div>
         `;
@@ -6754,7 +6820,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     updateFieldAndRender(k,v){ modalState.form[k] = v; if(k==='channel') maybeAutoFillTemplateForForm(); render(); },
     updateSetupTypeAndRender(v){
       const f = modalState.form;
-      const tpl = CHANNEL_SETUP_TEMPLATES[(f.channel||'').trim()];
+      const tpl = CHANNEL_SETUP_TEMPLATES[normalizeChannelName(f.channel)];
       const tasks = f.setupTasks || [];
       const allUnchecked = tasks.every(t => !t.done);
       const currentLabels = tasks.map(t => t.label);
