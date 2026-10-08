@@ -814,6 +814,12 @@
   .memo-modal .journal-memo-textarea{min-height:72px;padding:9px 11px;}
   .memo-modal .journal-memo-due{margin-bottom:8px;}
   .memo-footer{display:flex;gap:8px;align-items:center;margin-top:10px;}
+  /* 이동시간(미팅 앞에 붙는 이동 구간): 블록 맨 위에 빗금 띠로 표시 */
+  .time-grid-travel{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:4px;padding:0 8px;font-size:9px;font-weight:700;color:var(--ink-soft);background:repeating-linear-gradient(135deg,rgba(35,46,41,0.11) 0 5px,rgba(35,46,41,0.03) 5px 10px);border-bottom:1px dashed rgba(35,46,41,0.32);overflow:hidden;white-space:nowrap;pointer-events:none;}
+  .time-grid-travel.is-return{top:auto;bottom:0;border-bottom:none;border-top:1px dashed rgba(35,46,41,0.32);}
+  .time-grid-block-important .time-grid-travel.is-return{border-top-color:rgba(175,74,65,0.4);}
+  .time-grid-week-block .time-grid-travel{font-size:8px;padding:0 5px;}
+  .time-grid-block-important .time-grid-travel{color:var(--urgent);background:repeating-linear-gradient(135deg,rgba(175,74,65,0.17) 0 5px,rgba(175,74,65,0.05) 5px 10px);border-bottom-color:rgba(175,74,65,0.4);}
   /* 입력 중인 창에서 바깥을 눌렀을 때 — 닫지 않고 살짝 흔들어서 알려줌 */
   @keyframes modalNudge{0%,100%{transform:translateX(0);}20%{transform:translateX(-7px);}40%{transform:translateX(7px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}
   .modal-nudge{animation:modalNudge .38s ease;}
@@ -991,7 +997,7 @@
 
 <script>
 (function(){
-  const APP_BUILD = '2026.10.07-j'; // 화면에 떠 있는 게 최신 파일인지 확인하는 용도 (⋯ 메뉴 맨 아래에 표시) — 고칠 때마다 올림
+  const APP_BUILD = '2026.10.07-m'; // 화면에 떠 있는 게 최신 파일인지 확인하는 용도 (⋯ 메뉴 맨 아래에 표시) — 고칠 때마다 올림
   const STORAGE_KEY = 'promo-tracker-items';
   const CHANNELS_KEY = 'promo-tracker-channels';
   const CHANNELS_ENDED_KEY = 'promo-tracker-channels-ended';
@@ -1709,6 +1715,9 @@
     out.dueDate = importDate(t.dueDate);
     out.completedDate = importDate(t.completedDate) || null;
     out.starred = !!t.starred;
+    const tm = taskTravelMin(t);
+    if(tm && out.time) out.travelMin = tm; else delete out.travelMin;
+    if(!out.travelMin || (t.returnMode !== 'yes' && t.returnMode !== 'no')) delete out.returnMode;
     return out;
   }
   // 가져온 프로모션 항목 정리. 이미 있는 항목을 갱신할 땐(isNew=false) 적혀 있는 필드만 손대서, 안 적은 값이 기본값으로 덮어써지지 않게 함
@@ -2677,11 +2686,12 @@
       if(t.done || !t.time) return;
       if(!taskAppliesToDate(t, today)) return;
       const startMin = timeToMinutes(t.time);
-      if(startMin === null || startMin !== nowMin) return; // 정각에 딱 맞을 때만(분 단위로 한 번씩 체크하니 이 순간 놓치면 그날은 못 알림)
+      const leaveMin = startMin === null ? null : Math.max(0, startMin - taskTravelMin(t)); // 이동시간이 있으면 "출발할 시각"에 알려줌
+      if(leaveMin === null || leaveMin !== nowMin) return; // 정각에 딱 맞을 때만(분 단위로 한 번씩 체크하니 이 순간 놓치면 그날은 못 알림)
       const key = `${t.id}|${today}`;
       if(notifiedTaskKeys.has(key)) return;
       notifiedTaskKeys.add(key);
-      activeReminders.push({ taskId: t.id, text: t.text || '(내용 없음)', dateKey: today });
+      activeReminders.push({ taskId: t.id, text: t.text || '(내용 없음)', dateKey: today, travel: taskTravelMin(t) ? { startAt: normalizeTime(t.time), min: taskTravelMin(t) } : null });
       changed = true;
     });
     if(changed) render();
@@ -3267,7 +3277,7 @@
         <div class="${rowClass}">
           <input type="checkbox" ${(done || journalSelectedIds.has(task.id))?'checked':''} ${linkedDone?'disabled title="프로모션 항목 자체를 다시 진행중으로 바꿔야 해요"':''} onchange="${done ? `App.toggleJournalTaskDone('${task.id}', '${jd}')` : `App.toggleJournalSelectItem('${task.id}')`}" />
           <span class="star-toggle ${task.starred?'is-starred':''}" onclick="App.toggleJournalTaskStar('${task.id}')" title="중요 표시">${task.starred?'★':'☆'}</span>
-          ${task.time ? `<span class="journal-time-badge">🕐 ${escapeHtml(normalizeTime(task.time))}${task.endTime ? '~'+escapeHtml(normalizeTime(task.endTime)) : ''}</span>` : ''}
+          ${task.time ? `<span class="journal-time-badge">🕐 ${escapeHtml(normalizeTime(task.time))}${task.endTime ? '~'+escapeHtml(normalizeTime(task.endTime)) : ''}</span>${taskTravelMin(task) ? `<span class="journal-time-badge" title="${escapeHtml(travelDepartLabel(task))} 출발${taskReturnMin(task) ? ' · 복귀 ' + travelLabel(taskReturnMin(task)) : ' · 직퇴'}">🚗 ${taskReturnMin(task) ? '왕복 ' : ''}${travelLabel(taskTravelMin(task))}</span>` : ''}` : ''}
           <div class="journal-linked-content" onclick="${clickAction}">
             <span class="journal-link-type-tag journal-link-${task.linkedType}">${journalLinkTypeLabel(task.linkedType)}</span>
             ${linkedItem.channel ? `<span class="tag" style="background:${channelColor(linkedItem.channel).bg};color:${channelColor(linkedItem.channel).text};">${escapeHtml(linkedItem.channel)}</span>` : ''}
@@ -3294,7 +3304,7 @@
         <div class="journal-linked-content" onclick="App.openTaskMemo('${task.id}')">
           <span class="journal-cat-tag journal-cat-${task.category}">${task.category==='issue'?'팔로우업':'할일'}</span>
           ${task.category!=='issue' && task.taskType && task.taskType!=='todo' ? `<span class="journal-type-pill journal-type-${task.taskType}">${task.taskType==='meeting'?'🗣️ 미팅':task.taskType==='proposal'?'💡 제안':task.taskType==='call'?'💡 제안':''}</span>` : ''}
-          ${task.time ? `<span class="journal-time-badge">🕐 ${escapeHtml(normalizeTime(task.time))}${task.endTime ? '~'+escapeHtml(normalizeTime(task.endTime)) : ''}</span>` : ''}
+          ${task.time ? `<span class="journal-time-badge">🕐 ${escapeHtml(normalizeTime(task.time))}${task.endTime ? '~'+escapeHtml(normalizeTime(task.endTime)) : ''}</span>${taskTravelMin(task) ? `<span class="journal-time-badge" title="${escapeHtml(travelDepartLabel(task))} 출발${taskReturnMin(task) ? ' · 복귀 ' + travelLabel(taskReturnMin(task)) : ' · 직퇴'}">🚗 ${taskReturnMin(task) ? '왕복 ' : ''}${travelLabel(taskTravelMin(task))}</span>` : ''}` : ''}
           <span class="journal-linked-title">${escapeHtml(task.text || placeholder || '(내용 없음)')}</span>
           ${task.recurrence ? `<span class="journal-recur-label">🔁 ${recurrenceLabel(task)}</span>` : ''}
           ${task.dueDate ? (() => {
@@ -3372,6 +3382,28 @@
     const m = norm.match(/^(\d{1,2}):(\d{2})/);
     if(!m) return null;
     return (+m[1]) * 60 + (+m[2]);
+  }
+  // 이동시간(앞): 미팅 시작 앞에 붙는 이동 구간. 일정의 time/endTime은 "실제 미팅 시각" 그대로 두고, 시간표에서만 (시작 - 이동시간)부터 빗금 구간으로 이어 그림
+  const TRAVEL_OPTIONS = [0, 15, 30, 45, 60, 90];
+  function taskTravelMin(t){ const n = Math.round(+(t && t.travelMin)); return (Number.isFinite(n) && n > 0) ? Math.min(n, 240) : 0; }
+  // 복귀 이동시간: 미팅이 끝난 뒤 사무실로 돌아오는 시간(앞 이동시간과 같은 길이). 기본은 "자동" —
+  // 15:00 전에 시작하는 미팅은 복귀, 15:00 이후(15:00 포함)에 시작하면 직퇴로 보고, 예외인 미팅만 일정 창에서 '복귀함'/'직퇴'로 직접 지정
+  const RETURN_AUTO_BEFORE_MIN = 15 * 60; // 이 시각 "이후"(포함)에 시작하는 미팅은 자동으로 직퇴
+  function taskReturnMin(t){
+    const tr = taskTravelMin(t);
+    if(!tr) return 0;
+    const mode = t && t.returnMode;
+    if(mode === 'no') return 0;
+    if(mode === 'yes') return tr;
+    const start = timeToMinutes(t.time);
+    return (start !== null && start < RETURN_AUTO_BEFORE_MIN) ? tr : 0;
+  }
+  function travelLabel(m){ return m >= 60 ? `${Math.floor(m/60)}시간${m % 60 ? ' ' + (m % 60) + '분' : ''}` : `${m}분`; }
+  function travelDepartLabel(t){
+    const start = timeToMinutes(t.time), tr = taskTravelMin(t);
+    if(start === null || !tr) return '';
+    const m = Math.max(0, start - tr);
+    return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
   }
   // 시간이 겹치는 일정 배치.
   //  · 시작 시각이 거의 같은 일정(minGapMin 이내)은 제목이 서로 가리니까 예전처럼 나란히(컬럼) 나눔
@@ -3459,13 +3491,20 @@
       if(startMin === null) return;
       let endMin = isDeadlineMarker ? deadlineAtMin : timeToMinutes(t.endTime);
       if(endMin === null || endMin <= startMin) endMin = startMin + TIME_GRID_DEFAULT_DURATION;
+      // 이동시간이 있으면 블록은 "출발 시각"부터 시작 (실제 미팅 시작은 meetingStartMin에 따로 보관)
+      const travelMin = (isDeadlineMarker || linkedItem) ? 0 : taskTravelMin(t);
+      const returnMin = (isDeadlineMarker || linkedItem) ? 0 : taskReturnMin(t);
+      const meetingStartMin = startMin;
+      const meetingEndMin = endMin;
+      startMin = startMin - travelMin;
+      endMin = endMin + returnMin; // 블록은 "복귀 끝"까지 이어서 그림 (실제 미팅 끝은 meetingEndMin)
       const clippedStart = Math.max(startMin, TIME_GRID_START_MIN);
       const clippedEnd = Math.min(endMin, TIME_GRID_END_MIN);
       if(clippedEnd <= TIME_GRID_START_MIN || clippedStart >= TIME_GRID_END_MIN) return; // 시간표 범위 밖
       const label = linkedItem ? (linkedItem.title || linkedItem.content) : (t.text || '(내용 없음)');
       const extendsPastView = endMin > TIME_GRID_END_MIN; // 마감이 자정 근처 등 22시 이후라 시간표 끝에서 잘림
       const isDone = isTaskDoneOnDate(t, jd) || isLinkedTaskEffectivelyDone(t);
-      blocks.push({ task: t, startMin: clippedStart, endMin: Math.max(clippedEnd, clippedStart+12), realEndMin: endMin, label, isLinked: !!linkedItem, isDeadlineMarker, extendsPastView, isDone, channel: linkedItem ? linkedItem.channel : null, kind: t.category==='issue' ? 'issue' : (t.taskType||'todo') });
+      blocks.push({ task: t, startMin: clippedStart, endMin: Math.max(clippedEnd, clippedStart+12), realEndMin: endMin, travelMin, returnMin, meetingStartMin, meetingEndMin, label, isLinked: !!linkedItem, isDeadlineMarker, extendsPastView, isDone, channel: linkedItem ? linkedItem.channel : null, kind: t.category==='issue' ? 'issue' : (t.taskType||'todo') });
     });
     // 일정이 없어도 시간표 축은 항상 고정으로 떠 있게 함 (있다없다 왔다갔다 하지 않게)
     return blocks.length ? packTimeGridLanes(blocks, minGapMin) : [];
@@ -3545,12 +3584,20 @@
         let isCompact = false, minH = 32;
         if(isCut && actualPx < 30){ isCompact = true; minH = 20; }
         else if(!isCut && topPx + Math.max(actualPx, 32) > colHeight){ isCompact = true; minH = 18; }
+        // 이동시간 빗금 구간(블록 맨 위) — 이 조각에 실제로 보이는 만큼만
+        const pieceTravelMin = b.travelMin ? Math.max(0, Math.min(b.meetingStartMin, b.endMin) - Math.max(b.meetingStartMin - b.travelMin, b.startMin)) : 0;
+        const pieceReturnMin = b.returnMin ? Math.max(0, Math.min(b.meetingEndMin + b.returnMin, b.endMin) - Math.max(b.meetingEndMin, b.startMin)) : 0;
+        const travelPx = pieceTravelMin * (HOUR_PX_V / 60);
+        const returnPx = pieceReturnMin * (HOUR_PX_V / 60);
+        if((pieceTravelMin || pieceReturnMin) && !isCompact) minH = Math.max(minH, 32 + travelPx + returnPx); // 빗금 구간 + 제목/시간 두 줄이 다 들어갈 높이
         const heightPx = Math.max(actualPx, minH);
         if(topPx + heightPx > colHeight) topPx = colHeight - heightPx;  // 어떤 경우에도 칸 밖으로 안 나가게
         const blockHeightPx = isCutBottom ? heightPx : heightPx - 3;     // 잘린 아래쪽은 경계에 붙이고, 나머지는 3px 띄움
         const indentPx = (b._depth || 0) * 12;
         const contFlagText = isCutBottom ? '▾ 이어짐' : (isCutTop ? '▴ 이어서' : '');
         const contArrow = isCutBottom ? '▾' : (isCutTop ? '▴' : '');
+        const travelHtml = pieceTravelMin ? `<div class="time-grid-travel" style="height:${travelPx}px;" title="이동시간 ${travelLabel(b.travelMin)} (${fmtMinHM(Math.max(0, b.meetingStartMin - b.travelMin))} 출발)">${travelPx >= 15 ? `🚗 이동 ${travelLabel(b.travelMin)}` : (travelPx >= 9 ? '🚗' : '')}</div>` : '';
+        const returnHtml = pieceReturnMin ? `<div class="time-grid-travel is-return" style="height:${returnPx}px;" title="복귀 ${travelLabel(b.returnMin)} (${fmtMinHM(b.meetingEndMin)}~${fmtMinHM(b.meetingEndMin + b.returnMin)})">${returnPx >= 15 ? `🚗 복귀 ${travelLabel(b.returnMin)}` : (returnPx >= 9 ? '🚗' : '')}</div>` : '';
         const contLineFlag = (isCompact && contArrow) ? `<span class="time-grid-cont-flag" title="${isCutBottom ? '오후 칸으로 이어져요' : '오전 칸에서 이어져 왔어요'}">${contArrow}</span>` : '';
         const kindClass = b.task.starred ? 'time-grid-block-important' : 'time-grid-block-neutral';
         const minutesToLabel = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
@@ -3563,15 +3610,16 @@
         const deadlineSuffix = b.isDeadlineMarker ? ' 마감' : '';
         const continues = b.extendsPastView || b.crossesHalf;
         const channelPrefix = b.channel ? `[${b.channel}] ` : '';
-        const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(timeLabel)}${deadlineSuffix}${continues ? ' (계속 이어짐)' : ''} ${channelPrefix}${escapeHtml(b.label)}${b.task.notes ? '&#10;' + escapeHtml(b.task.notes).replace(/\n/g, '&#10;') : ''}`;
+        const travelNote = b.travelMin ? ` · 🚗 이동 ${travelLabel(b.travelMin)} (${fmtMinHM(Math.max(0, b.meetingStartMin - b.travelMin))} 출발)${b.returnMin ? ` · 복귀 ${travelLabel(b.returnMin)}` : ' · 직퇴'}` : '';
+        const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(timeLabel)}${travelNote}${deadlineSuffix}${continues ? ' (계속 이어짐)' : ''} ${channelPrefix}${escapeHtml(b.label)}${b.task.notes ? '&#10;' + escapeHtml(b.task.notes).replace(/\n/g, '&#10;') : ''}`;
         // 세로형은 열 전체 폭(또는 레인만큼)을 쓰니까 채널명은 폭 걱정 없이 항상 같이 보여줌
         // 프로모션에 연결된 항목(마감 등)이나 마감리드타임 마커는 시간이 항목 상태에서 자동으로 나오는 거라
         // 드래그로 옮기는 게 의미가 없음 — 직접 만든 할일/미팅만 드래그로 옮기고 늘릴 수 있게 함
         const draggable = !b.isLinked && !b.isDeadlineMarker;
-        return `<div class="time-grid-v-block ${kindClass} ${(b._depth||0)>0?'is-stacked':''} ${isCutBottom?'is-cut-bottom':''} ${isCutTop?'is-cut-top':''} ${isCompact?'is-compact':''} ${b.isDeadlineMarker?'is-deadline-marker':''} ${b.isDone?'is-done':''} ${draggable?'is-draggable':''}" data-half-start="${half.start}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${blockHeightPx}px;left:calc(${indentPx}px + (100% - ${indentPx}px) * ${b._lane} / ${b._laneCount});width:calc((100% - ${indentPx}px) / ${b._laneCount} - 4px);z-index:${b._z};" ${draggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
-          <div class="time-grid-v-block-line">${b.isDone ? '<span class="time-grid-v-block-check">✓</span>' : `<span class="time-grid-v-block-icon">${icon}</span>`}${b.channel ? `<span class="time-grid-h-block-channel">[${escapeHtml(b.channel)}]</span>` : ''}<span class="time-grid-v-block-label">${escapeHtml(b.label)}</span>${starHtml}${contLineFlag}</div>
+        return `<div class="time-grid-v-block ${kindClass} ${(b._depth||0)>0?'is-stacked':''} ${isCutBottom?'is-cut-bottom':''} ${isCutTop?'is-cut-top':''} ${isCompact?'is-compact':''} ${b.isDeadlineMarker?'is-deadline-marker':''} ${b.isDone?'is-done':''} ${draggable?'is-draggable':''}" data-half-start="${half.start}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${blockHeightPx}px;left:calc(${indentPx}px + (100% - ${indentPx}px) * ${b._lane} / ${b._laneCount});width:calc((100% - ${indentPx}px) / ${b._laneCount} - 4px);z-index:${b._z};${pieceTravelMin ? `padding-top:${5 + travelPx}px;` : ''}" ${draggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
+          ${travelHtml}<div class="time-grid-v-block-line">${b.isDone ? '<span class="time-grid-v-block-check">✓</span>' : `<span class="time-grid-v-block-icon">${icon}</span>`}${b.channel ? `<span class="time-grid-h-block-channel">[${escapeHtml(b.channel)}]</span>` : ''}<span class="time-grid-v-block-label">${escapeHtml(b.label)}</span>${starHtml}${contLineFlag}</div>
           <div class="time-grid-v-block-timeline"><span>${escapeHtml(timeLabel)}${deadlineSuffix}</span>${contFlagText ? `<span class="time-grid-cont-flag">${contFlagText}</span>` : ''}</div>
-          ${draggable ? `<div class="time-grid-v-block-resize" onmousedown="App.startBlockDrag(event, '${b.task.id}', 'resize')" title="드래그해서 길이 조절"></div>` : ''}
+          ${returnHtml}${draggable ? `<div class="time-grid-v-block-resize" onmousedown="App.startBlockDrag(event, '${b.task.id}', 'resize')" title="드래그해서 길이 조절"></div>` : ''}
         </div>`;
       }).join('');
       return `
@@ -3634,21 +3682,28 @@
         ? `<div class="time-grid-v-lunch" style="top:${((dayLunchStart-TIME_GRID_START_MIN)/totalMin)*colHeight}px;height:${((dayLunchEnd-dayLunchStart)/totalMin)*colHeight}px;"><span class="time-grid-v-lunch-label">🍚 점심</span></div>` : '';
       const eventsHtml = packed.map(b => {
         const topPx = ((b.startMin - TIME_GRID_START_MIN) / totalMin) * colHeight;
-        const heightPx = Math.max(((b.endMin - b.startMin) / totalMin) * colHeight, 40);
+        const pieceTravelMin = b.travelMin ? Math.max(0, Math.min(b.meetingStartMin, b.endMin) - Math.max(b.meetingStartMin - b.travelMin, b.startMin)) : 0;
+        const pieceReturnMin = b.returnMin ? Math.max(0, Math.min(b.meetingEndMin + b.returnMin, b.endMin) - Math.max(b.meetingEndMin, b.startMin)) : 0;
+        const travelPx = pieceTravelMin * (HOUR_PX_W / 60);
+        const returnPx = pieceReturnMin * (HOUR_PX_W / 60);
+        const returnHtml = pieceReturnMin ? `<div class="time-grid-travel is-return" style="height:${returnPx}px;" title="복귀 ${travelLabel(b.returnMin)}">${returnPx >= 12 ? `🚗 복귀 ${travelLabel(b.returnMin)}` : (returnPx >= 8 ? '🚗' : '')}</div>` : '';
+        const heightPx = Math.max(((b.endMin - b.startMin) / totalMin) * colHeight, 40 + travelPx + returnPx);
         const indentPx = (b._depth || 0) * 6;
+        const travelNote = b.travelMin ? ` · 이동 ${travelLabel(b.travelMin)} (${fmtMinHM(Math.max(0, b.meetingStartMin - b.travelMin))} 출발)${b.returnMin ? ` · 복귀 ${travelLabel(b.returnMin)}` : ' · 직퇴'}` : '';
+        const travelHtml = pieceTravelMin ? `<div class="time-grid-travel" style="height:${travelPx}px;" title="이동시간 ${travelLabel(b.travelMin)}">${travelPx >= 12 ? `🚗 ${travelLabel(b.travelMin)}` : (travelPx >= 8 ? '🚗' : '')}</div>` : '';
         const kindClass = b.task.starred ? 'time-grid-block-important' : 'time-grid-block-neutral';
         const icon = b.isDeadlineMarker ? '⏰' : (b.isLinked ? '🎯' : ({todo:'📌',issue:'👀',meeting:'🗣️',proposal:'💡',call:'💡',review:'📌'}[b.kind] || '📌'));
         const minutesToLabelW = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
         const timeLabel = b.isDeadlineMarker
           ? `${minutesToLabelW(b.startMin)}~${minutesToLabelW(b.realEndMin != null ? b.realEndMin : b.endMin)}`
           : `${normalizeTime(b.task.time)}${b.task.endTime ? '~'+normalizeTime(b.task.endTime) : ''}`;
-        const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(b.label)} (${timeLabel})`;
+        const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(b.label)} (${timeLabel}${travelNote})`;
         const weekDraggable = !b.isLinked && !b.isDeadlineMarker;
         const isPast = isToday && b.endMin < nowMinNow;
-        return `<div class="time-grid-week-block ${kindClass} ${(b._depth||0)>0?'is-stacked':''} ${b.isDone?'is-done':''} ${weekDraggable?'is-draggable':''} ${isPast?'is-past':''}" data-half-start="${TIME_GRID_START_MIN}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${heightPx-2}px;left:calc(${indentPx}px + (100% - ${indentPx}px) * ${b._lane} / ${b._laneCount});width:calc((100% - ${indentPx}px) / ${b._laneCount} - 2px);z-index:${b._z};" ${weekDraggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
-          <div class="time-grid-week-block-title"><span class="time-grid-week-block-icon">${icon}</span> ${escapeHtml(b.label)}</div>
+        return `<div class="time-grid-week-block ${kindClass} ${(b._depth||0)>0?'is-stacked':''} ${b.isDone?'is-done':''} ${weekDraggable?'is-draggable':''} ${isPast?'is-past':''}" data-half-start="${TIME_GRID_START_MIN}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${heightPx-2}px;left:calc(${indentPx}px + (100% - ${indentPx}px) * ${b._lane} / ${b._laneCount});width:calc((100% - ${indentPx}px) / ${b._laneCount} - 2px);z-index:${b._z};${pieceTravelMin ? `padding-top:${2 + travelPx}px;` : ''}" ${weekDraggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
+          ${travelHtml}<div class="time-grid-week-block-title"><span class="time-grid-week-block-icon">${icon}</span> ${escapeHtml(b.label)}</div>
           <div class="time-grid-week-block-time">${escapeHtml(timeLabel)}</div>
-          ${weekDraggable ? `<div class="time-grid-v-block-resize" onmousedown="App.startBlockDrag(event, '${b.task.id}', 'resize')" title="드래그해서 길이 조절"></div>` : ''}
+          ${returnHtml}${weekDraggable ? `<div class="time-grid-v-block-resize" onmousedown="App.startBlockDrag(event, '${b.task.id}', 'resize')" title="드래그해서 길이 조절"></div>` : ''}
         </div>`;
       }).join('');
       const dowLabelClass = d.getDay() === 0 ? 'is-sunday' : d.getDay() === 6 ? 'is-saturday' : '';
@@ -3821,12 +3876,13 @@
     const topEdge = (y - st.grabY) - r.top;
     // 이어져 온 조각(오후 칸의 윗부분 등)을 잡았으면 숨은 앞부분만큼 보정해서 "일정 전체의 시작 시각"을 구함
     let startMin = Math.round((halfStart + (topEdge / r.height) * totalMin + (st.startOffsetMin || 0)) / 30) * 30;
-    startMin = Math.max(TIME_GRID_START_MIN, Math.min(TIME_GRID_END_MIN - 30, startMin));
+    startMin = Math.max(TIME_GRID_START_MIN + (st.travelMin || 0), Math.min(TIME_GRID_END_MIN - 30, startMin)); // 출발 시각이 07:00 밖으로 나가지 않게
     const endMinShown = Math.min(TIME_GRID_END_MIN, startMin + st.durationMin);
+    const endBlockMin = Math.min(TIME_GRID_END_MIN, endMinShown + (st.returnMin || 0)); // 점선 칸은 복귀 구간 끝까지
     st.target = { date: trackEl.dataset.date || null, startMin };
     if(st.indicatorEl){
       // 점선 칸은 이 칸(트랙) 안에 보이는 부분만 그림 — 일정이 칸 경계를 넘어가면 이 칸에선 잘려 보임
-      const topMin = Math.max(startMin, halfStart), botMin = Math.min(endMinShown, halfStart + totalMin);
+      const topMin = Math.max(startMin - (st.travelMin || 0), halfStart), botMin = Math.min(endBlockMin, halfStart + totalMin); // 점선 칸은 이동시간(앞·복귀) 구간까지 포함해서 그림
       const ind = st.indicatorEl;
       if(botMin <= topMin){ ind.style.display = 'none'; }
       else{
@@ -3852,7 +3908,7 @@
     // 이 조각 안에서 보이는 만큼만 높이를 바꿔 보여줌(칸 밖으로는 안 나가게) + 커서 옆에 새 종료 시각 표시
     const halfEnd = st.halfStartMin + st.totalMin;
     const pxPerMin = st.colHeight / st.totalMin;
-    let h = (Math.min(newEnd, halfEnd) - st.pieceStartMin) * pxPerMin;
+    let h = (Math.min(newEnd + (st.returnMin || 0), halfEnd) - st.pieceStartMin) * pxPerMin;
     if(Number.isFinite(h)){
       h = Math.max(20, Math.min(h, st.colHeight - st.startTop));
       st.blockEl.style.height = h + 'px';
@@ -3895,7 +3951,7 @@
       blockEl,
       rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
       grabX: evt.clientX - rect.left, grabY: evt.clientY - rect.top,
-      durationMin, target: null, ghostEl: null, indicatorEl: null, raf: 0
+      durationMin, travelMin: task ? taskTravelMin(task) : 0, returnMin: task ? taskReturnMin(task) : 0, target: null, ghostEl: null, indicatorEl: null, raf: 0
     };
     document.addEventListener('mousemove', onBlockDragMove);
     document.addEventListener('mouseup', onBlockDragEnd);
@@ -4060,6 +4116,38 @@
         const endMin = startMin + 60;
         task.endTime = `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`;
       }
+    }
+    journalMemoDirty = true;
+    render();
+  }
+  function updateJournalTaskTravel(id, value){
+    const task = findJournalTaskForEdit(id);
+    if(!task) return;
+    const m = +value || 0;
+    if(m > 0) task.travelMin = m; else { delete task.travelMin; delete task.returnMode; }
+    journalMemoDirty = true;
+    render();
+  }
+  function updateJournalTaskReturnMode(id, value){
+    const task = findJournalTaskForEdit(id);
+    if(!task) return;
+    if(value === 'yes' || value === 'no') task.returnMode = value; else delete task.returnMode;
+    journalMemoDirty = true;
+    render();
+  }
+  // 이미 "이동시간 포함"으로 잡아둔 일정(예: 14:30~17:00)을 한 번에 정리: 앞 30분을 이동시간으로 돌리고 미팅 시작을 30분 뒤(15:00)로 — 끝 시각은 그대로
+  function convertLeadToTravel(id){
+    const task = findJournalTaskForEdit(id);
+    if(!task) return;
+    const start = timeToMinutes(task.time);
+    if(start === null) return;
+    const newStart = start + 30;
+    task.travelMin = 30;
+    task.time = `${String(Math.floor(newStart/60)).padStart(2,'0')}:${String(newStart%60).padStart(2,'0')}`;
+    const end = timeToMinutes(task.endTime);
+    if(end === null || end < newStart + 30){
+      const e = newStart + 60;
+      task.endTime = `${String(Math.floor(e/60)).padStart(2,'0')}:${String(e%60).padStart(2,'0')}`;
     }
     journalMemoDirty = true;
     render();
@@ -7309,6 +7397,22 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
                   <option value="custom" ${memoRecurType==='custom'?'selected':''}>요일 직접 선택</option>
                 </select>
               </div>
+              ${memoTask.time ? `
+                <div class="memo-inline-row">
+                  <label title="미팅 시작 앞에 붙는 이동 구간이에요. 시간표에 빗금으로 표시되고, 알림은 출발 시각에 와요">🚗 이동</label>
+                  <select class="journal-time-input" style="width:auto;flex:0 0 auto;padding:6px 8px;" onchange="App.updateJournalTaskTravel('${memoTask.id}', this.value)">
+                    ${TRAVEL_OPTIONS.map(m => `<option value="${m}" ${taskTravelMin(memoTask)===m?'selected':''}>${m ? '시작 ' + travelLabel(m) + ' 전' : '없음'}</option>`).join('')}
+                  </select>
+                  ${taskTravelMin(memoTask)
+                    ? `<span class="memo-inline-hint">🚗 ${escapeHtml(travelDepartLabel(memoTask))} 출발 → ${escapeHtml(normalizeTime(memoTask.time))} 시작</span>
+                      <select class="journal-time-input" style="width:auto;flex:0 0 auto;padding:6px 8px;" title="미팅이 끝난 뒤 복귀 이동시간 — 자동은 15:00 전에 시작하는 미팅만 복귀로 봐요(15:00 이후 시작은 직퇴)" onchange="App.updateJournalTaskReturnMode('${memoTask.id}', this.value)">
+                        <option value="" ${!memoTask.returnMode||memoTask.returnMode==='auto'?'selected':''}>복귀: 자동 (${taskReturnMin(memoTask) ? '3시 전 → 복귀' : '3시 이후 → 직퇴'})</option>
+                        <option value="yes" ${memoTask.returnMode==='yes'?'selected':''}>복귀함 (+${travelLabel(taskTravelMin(memoTask))})</option>
+                        <option value="no" ${memoTask.returnMode==='no'?'selected':''}>직퇴 (복귀 없음)</option>
+                      </select>`
+                    : `<span class="section-label-action" style="font-weight:400;" onclick="App.convertLeadToTravel('${memoTask.id}')" title="지금 입력한 시작 시각(${escapeHtml(normalizeTime(memoTask.time))})의 앞 30분을 이동시간으로 바꿔요. 실제 미팅 시작은 30분 뒤가 돼요">↪ 앞 30분을 이동시간으로</span>`}
+                </div>
+              ` : ''}
               ${memoRecurType==='custom' ? `
                 <div class="journal-recur-day-picker">
                   ${['일','월','화','수','목','금','토'].map((dn, dw) => {
@@ -7383,7 +7487,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         ${activeReminders.map(r => `
           <div class="reminder-banner">
             <span class="reminder-banner-icon">🔔</span>
-            <span class="reminder-banner-text">지금 시작: ${escapeHtml(r.text)}</span>
+            <span class="reminder-banner-text">${r.travel ? `🚗 지금 출발: ${escapeHtml(r.text)} (${escapeHtml(r.travel.startAt)} 시작 · 이동 ${travelLabel(r.travel.min)})` : `지금 시작: ${escapeHtml(r.text)}`}</span>
             <button type="button" class="reminder-banner-check" onclick="App.dismissReminder('${r.taskId}')" title="확인했어요, 알림만 닫아요">확인</button>
           </div>
         `).join('')}
@@ -7541,6 +7645,9 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     updateJournalTaskText,
     setJournalTaskKind,
     updateJournalTaskTime,
+    updateJournalTaskTravel,
+    updateJournalTaskReturnMode,
+    convertLeadToTravel,
     updateJournalTaskEndTime,
     updateJournalTaskNotes,
     saveJournalMemoNow,
