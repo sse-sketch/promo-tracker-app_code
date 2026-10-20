@@ -1021,7 +1021,7 @@
 
 <script>
 (function(){
-  const APP_BUILD = '2026.10.07-t'; // 화면에 떠 있는 게 최신 파일인지 확인하는 용도 (⋯ 메뉴 맨 아래에 표시) — 고칠 때마다 올림
+  const APP_BUILD = '2026.10.07-u'; // 화면에 떠 있는 게 최신 파일인지 확인하는 용도 (⋯ 메뉴 맨 아래에 표시) — 고칠 때마다 올림
   const STORAGE_KEY = 'promo-tracker-items';
   const CHANNELS_KEY = 'promo-tracker-channels';
   const CHANNELS_ENDED_KEY = 'promo-tracker-channels-ended';
@@ -3196,6 +3196,9 @@
     if(holidayCheck && (holidayCheck.type === 'annual' || holidayCheck.type === 'public') && jd !== task.createdDate){
       return false;
     }
+    // 프로모션에 연결된 리마인더(마감/선정확인/세팅)는 "해결될 때까지 계속" 뜨는 항목이라 지난 날짜엔 계속 남아있지만,
+    // 아직 오지 않은 날짜 칸에 미리 떠 있진 않음 — 안 그러면 주별에서 같은 프로모션이 평일마다 줄줄이 보여서 중복처럼 보임
+    if(task.linkedItemId && jd > todayISO()) return false;
     if(!task.recurrence){
       if(task.createdDate && jd < task.createdDate) return false; // 지정한 날짜 되기 전엔 안 보임
       // 시각이 지정된 할일(할일/미팅/제안/컨택/검토 다 포함)은 "그날 하루"만 뜸 — 안 끝났으면 이월되는 대신
@@ -3541,7 +3544,7 @@
       const clippedStart = Math.max(startMin, TIME_GRID_START_MIN);
       const clippedEnd = Math.min(endMin, TIME_GRID_END_MIN);
       if(clippedEnd <= TIME_GRID_START_MIN || clippedStart >= TIME_GRID_END_MIN) return; // 시간표 범위 밖
-      const label = linkedItem ? (draftMark(linkedItem) + (linkedItem.title || linkedItem.content)) : (t.text || '(내용 없음)');
+      const label = linkedItem ? (linkTypeTag(t) + draftMark(linkedItem) + (linkedItem.title || linkedItem.content)) : (t.text || '(내용 없음)');
       const extendsPastView = endMin > TIME_GRID_END_MIN; // 마감이 자정 근처 등 22시 이후라 시간표 끝에서 잘림
       const isDone = isTaskDoneOnDate(t, jd) || isLinkedTaskEffectivelyDone(t);
       blocks.push({ task: t, startMin: clippedStart, endMin: Math.max(clippedEnd, clippedStart+12), realEndMin: endMin, travelMin, returnMin, meetingStartMin, meetingEndMin, label, isLinked: !!linkedItem, isDeadlineMarker, isWorkSlot, deadlineHint: (isWorkSlot && linkedItem && linkedItem.deadline === jd) ? (linkedItem.deadlineTime || '') : '', extendsPastView, isDone, channel: linkedItem ? linkedItem.channel : null, kind: t.category==='issue' ? 'issue' : (t.taskType||'todo') });
@@ -3699,13 +3702,14 @@
   // 주별 시간표 맨 위 "시각 미정" 띠 — 시각이 없어서 시간표 블록으로는 못 그리는 업무(이월되는 할일, 매일/매주 반복 업무,
   // 프로모션 연결 리마인더 등)를 요일별로 보여줌. 예전엔 일별 화면으로 가거나 아래 "이번주 목록"을 펼쳐야만 보였음
   function weekAllDayTasks(dateStr){
+    const drawnAsBlock = new Set(buildDayBlocks(dateStr).map(b => b.task.id)); // 마감 시각이 있어서 ⏰ 블록으로 이미 그려지는 리마인더 등 — 띠에 또 올리면 같은 게 두 번 나옴
     return [...tasksForDate(dateStr, 'todo'), ...tasksForDate(dateStr, 'issue')]
-      .filter(t => timeToMinutes(t.time) === null)
+      .filter(t => timeToMinutes(t.time) === null && !drawnAsBlock.has(t.id))
       .sort((a, b) => (b.starred ? 1 : 0) - (a.starred ? 1 : 0)); // ⭐중요한 건 위로
   }
   function weekAllDayChipHtml(t, dateStr){
     const linkedItem = t.linkedItemId ? items.find(i => i.id === t.linkedItemId) : null;
-    const label = linkedItem ? (draftMark(linkedItem) + (linkedItem.title || linkedItem.content || t.text)) : (t.text || '(내용 없음)');
+    const label = linkedItem ? (linkTypeTag(t) + draftMark(linkedItem) + (linkedItem.title || linkedItem.content || t.text)) : (t.text || '(내용 없음)');
     const carried = !t.recurrence && !!t.createdDate && t.createdDate < dateStr; // 며칠 전에 만들어져 안 끝난 채로 넘어온 업무
     const mark = t.recurrence ? '🔁' : (carried ? '↪' : (linkedItem ? '🎯' : journalTaskKindIcon(t)));
     const note = t.recurrence ? '반복 업무' : (carried ? `${t.createdDate.slice(5).replace('-', '/')}부터 이월` : (linkedItem ? '프로모션 일정' : '시각 미정'));
@@ -5535,6 +5539,11 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
   function statusChoiceOf(obj){ return ((obj.status || 'pending') === 'pending' && obj.drafted) ? 'drafted' : (obj.status || 'pending'); }
   function isDraftedItem(item){ return !!item && (item.status || 'pending') === 'pending' && !!item.drafted; }
   function draftMark(item){ return isDraftedItem(item) ? '✍️ ' : ''; }
+  // 연결 리마인더 종류 이름표 — 같은 프로모션이 "마감"과 "선정확인"으로 따로 뜰 때 구분이 되게
+  function linkTypeTag(task){
+    const tag = ({ selection: '선정확인', setup: '세팅', overdue: '지난마감' })[task && task.linkedType];
+    return tag ? `${tag} · ` : '';
+  }
   function computeSelectionForStatus(prevStatus, newStatus, prevSelection){
     if(newStatus !== 'submitted') return undefined;
     if(prevStatus === 'submitted') return prevSelection; // 이미 있던 값(레거시 undefined 포함) 그대로 유지
@@ -6566,7 +6575,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
           <div class="journal-list">
             ${matched.length ? matched.map(t => {
               const linkedItem = t.linkedItemId ? items.find(i => i.id === t.linkedItemId) : null;
-              const label = linkedItem ? (draftMark(linkedItem) + (linkedItem.title || linkedItem.content)) : (t.text || '(내용 없음)');
+              const label = linkedItem ? (linkTypeTag(t) + draftMark(linkedItem) + (linkedItem.title || linkedItem.content)) : (t.text || '(내용 없음)');
               const catLabel = t.category==='issue' ? '팔로우업' : '할일';
               const typePillLabel = (!linkedItem && t.category!=='issue' && t.taskType && t.taskType!=='todo')
                 ? (t.taskType==='meeting'?'🗣️ 미팅':t.taskType==='proposal'?'💡 제안':t.taskType==='call'?'💡 제안':'') : '';
