@@ -239,6 +239,7 @@
   .status-badge-submitted{background:var(--calm-soft);color:var(--calm);}
   .status-badge-unjoined{background:var(--surface-2);color:var(--ink-faint);}
   .status-badge-pending{background:var(--warn-soft);color:var(--warn);}
+  .status-badge-drafted{background:#E6EDF7;color:#3B5B8C;}
   .channel-breakdown{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
   .channel-stat-table{border:1px solid var(--line);border-radius:12px;overflow-x:auto;margin-bottom:22px;background:var(--surface);scrollbar-width:none;-ms-overflow-style:none;}
   .channel-stat-table::-webkit-scrollbar{display:none;}
@@ -1020,7 +1021,7 @@
 
 <script>
 (function(){
-  const APP_BUILD = '2026.10.07-r'; // 화면에 떠 있는 게 최신 파일인지 확인하는 용도 (⋯ 메뉴 맨 아래에 표시) — 고칠 때마다 올림
+  const APP_BUILD = '2026.10.07-t'; // 화면에 떠 있는 게 최신 파일인지 확인하는 용도 (⋯ 메뉴 맨 아래에 표시) — 고칠 때마다 올림
   const STORAGE_KEY = 'promo-tracker-items';
   const CHANNELS_KEY = 'promo-tracker-channels';
   const CHANNELS_ENDED_KEY = 'promo-tracker-channels-ended';
@@ -1269,8 +1270,8 @@
       const item = items.find(i => i.id === id);
       if(item){
         item.selection = computeSelectionForStatus(item.status, status, item.selection);
-        item.status = status;
-        if(status !== 'pending' && item.needsRecheck) item.needsRecheck = false; // 완료 처리되면 재확인 필요 플래그도 자동 해제
+        applyStatusChoice(item, status);
+        if(status !== 'pending' && status !== 'drafted' && item.needsRecheck) item.needsRecheck = false; // 완료 처리되면 재확인 필요 플래그도 자동 해제
       }
     });
     persist();
@@ -1317,7 +1318,7 @@
       if(task.linkedItemId && (task.linkedType === 'deadline' || task.linkedType === 'overdue')){
         const item = items.find(i => i.id === task.linkedItemId);
         if(item){
-          item.status = status;
+          applyStatusChoice(item, status);
           if(status === 'submitted') ensureSelectionReminder(item);
           itemsChanged = true;
         }
@@ -1642,7 +1643,7 @@
       const taskList = tasks.map(t => `${t.done?'[v]':'[ ]'} ${t.label}`).join('; ');
       return [
         it.channel||'', it.title||'', it.content||'', it.period||'', it.deadline||'', it.deadlineTime||'',
-        statusLabel(it.status), selectionLabel(it), it.assignee||'', it.needsRecheck ? 'Y' : '', it.coupon||'', it.notes||'',
+        isDraftedItem(it) ? '작성완료(제출 전)' : statusLabel(it.status), selectionLabel(it), it.assignee||'', it.needsRecheck ? 'Y' : '', it.coupon||'', it.notes||'',
         it.setupType||'', it.setupDeadline||'', progress, taskList
       ].map(esc).join(',');
     });
@@ -1753,6 +1754,9 @@
     if(isNew || 'deadline' in p) out.deadline = importDate(p.deadline);
     if(isNew || 'deadlineTime' in p) out.deadlineTime = importTime(p.deadlineTime);
     if(isNew || 'status' in p) out.status = ['pending','submitted','na','missed'].includes(p.status) ? p.status : 'pending';
+    if(isNew || 'drafted' in p) out.drafted = !!p.drafted;
+    if(out.drafted && ((out.status || 'pending') !== 'pending')) delete out.drafted; // 제출 전(대기중)일 때만 의미 있음
+    if(!out.drafted) delete out.drafted;
     if(isNew || 'needsRecheck' in p) out.needsRecheck = !!p.needsRecheck;
     if(isNew || 'starred' in p) out.starred = !!p.starred;
     if(out.period) out.period = normalizePeriod(out.period, +String(out.deadline || '').split('-')[0] || new Date().getFullYear());
@@ -1925,7 +1929,12 @@
       const byId = new Map(itemsUpdate.map(u => [u.id, u]));
       items = items.map(existing => {
         const u = byId.get(existing.id);
-        if(u){ updatedCount++; return Object.assign({}, existing, u); }
+        if(u){
+          updatedCount++;
+          const merged = Object.assign({}, existing, u);
+          if((merged.status || 'pending') !== 'pending') delete merged.drafted; // 상태가 바뀌어 더 이상 제출 전이 아니면 작성완료 표시도 정리
+          return merged;
+        }
         return existing;
       });
     }
@@ -2706,9 +2715,10 @@
     const nowMin = new Date().getHours()*60 + new Date().getMinutes();
     let changed = false;
     journalTasks.forEach(t => {
-      if(t.done || !t.time) return;
+      const startStr = t.time || (t.workDate === today ? t.workTime : ''); // 마감 리마인더는 "내가 정한 작성 시간"이 되면 알림
+      if(t.done || !startStr) return;
       if(!taskAppliesToDate(t, today)) return;
-      const startMin = timeToMinutes(t.time);
+      const startMin = timeToMinutes(startStr);
       const leaveMin = startMin === null ? null : Math.max(0, startMin - taskTravelMin(t)); // 이동시간이 있으면 "출발할 시각"에 알려줌
       if(leaveMin === null || leaveMin !== nowMin) return; // 정각에 딱 맞을 때만(분 단위로 한 번씩 체크하니 이 순간 놓치면 그날은 못 알림)
       const key = `${t.id}|${today}`;
@@ -3304,7 +3314,7 @@
           <div class="journal-linked-content" onclick="${clickAction}">
             <span class="journal-link-type-tag journal-link-${task.linkedType}">${journalLinkTypeLabel(task.linkedType)}</span>
             ${linkedItem.channel ? `<span class="tag" style="background:${channelColor(linkedItem.channel).bg};color:${channelColor(linkedItem.channel).text};">${escapeHtml(linkedItem.channel)}</span>` : ''}
-            <span class="journal-linked-title">${escapeHtml(linkedItem.title || linkedItem.content)}</span>
+            <span class="journal-linked-title">${draftMark(linkedItem)}${escapeHtml(linkedItem.title || linkedItem.content)}</span>
             ${progressText ? `<span class="journal-linked-progress">${progressText}</span>` : ''}
             ${ddayInfo ? `<span class="dday-mini dday-${urgencyClass(ddayInfo.n)}" title="${escapeHtml(ddayInfo.label)}">${ddayLabel(ddayInfo.n)}</span>` : ''}
           </div>
@@ -3500,6 +3510,13 @@
       let isDeadlineMarker = false;
       let deadlineAtMin = null;
       let linkedItem = t.linkedItemId ? items.find(i => i.id === t.linkedItemId) : null;
+      // 마감 리마인더를 끌어서 "내가 이 시간에 제안서를 쓴다"고 정해둔 경우(작성 시간) — 자동 배치(마감 2시간 전) 대신 그 시간으로.
+      // 프로모션의 실제 마감 시각(linkedItem.deadlineTime)은 그대로고, 이 시간대는 그날(workDate)에만 보임
+      let isWorkSlot = false;
+      if(startMin === null && linkedItem && (t.linkedType === 'deadline' || t.linkedType === 'overdue') && t.workDate === jd && timeToMinutes(t.workTime) !== null){
+        startMin = timeToMinutes(t.workTime);
+        isWorkSlot = true;
+      }
       // 시작 시각을 직접 안 넣었어도, 마감일이 오늘이고 마감 시각(예: 15:00)이 있는 마감 태스크면
       // 마감 시각 자체가 아니라 그 "N분 전부터"를 일정에 미리 꽂아둠 — 마감 닥쳐서야 보는 게 아니라 여유 있게 챙기라는 의도.
       // 단, 마감이 너무 늦은 시각(밤 8시 이후)이면 시간표에 억지로 안 넣음 — 업무기록 목록의 D-day 표시로 충분함
@@ -3512,7 +3529,7 @@
         }
       }
       if(startMin === null) return;
-      let endMin = isDeadlineMarker ? deadlineAtMin : timeToMinutes(t.endTime);
+      let endMin = isDeadlineMarker ? deadlineAtMin : (isWorkSlot ? timeToMinutes(t.workEndTime) : timeToMinutes(t.endTime));
       if(endMin === null || endMin <= startMin) endMin = startMin + TIME_GRID_DEFAULT_DURATION;
       // 이동시간이 있으면 블록은 "출발 시각"부터 시작 (실제 미팅 시작은 meetingStartMin에 따로 보관)
       const travelMin = (isDeadlineMarker || linkedItem) ? 0 : taskTravelMin(t);
@@ -3524,10 +3541,10 @@
       const clippedStart = Math.max(startMin, TIME_GRID_START_MIN);
       const clippedEnd = Math.min(endMin, TIME_GRID_END_MIN);
       if(clippedEnd <= TIME_GRID_START_MIN || clippedStart >= TIME_GRID_END_MIN) return; // 시간표 범위 밖
-      const label = linkedItem ? (linkedItem.title || linkedItem.content) : (t.text || '(내용 없음)');
+      const label = linkedItem ? (draftMark(linkedItem) + (linkedItem.title || linkedItem.content)) : (t.text || '(내용 없음)');
       const extendsPastView = endMin > TIME_GRID_END_MIN; // 마감이 자정 근처 등 22시 이후라 시간표 끝에서 잘림
       const isDone = isTaskDoneOnDate(t, jd) || isLinkedTaskEffectivelyDone(t);
-      blocks.push({ task: t, startMin: clippedStart, endMin: Math.max(clippedEnd, clippedStart+12), realEndMin: endMin, travelMin, returnMin, meetingStartMin, meetingEndMin, label, isLinked: !!linkedItem, isDeadlineMarker, extendsPastView, isDone, channel: linkedItem ? linkedItem.channel : null, kind: t.category==='issue' ? 'issue' : (t.taskType||'todo') });
+      blocks.push({ task: t, startMin: clippedStart, endMin: Math.max(clippedEnd, clippedStart+12), realEndMin: endMin, travelMin, returnMin, meetingStartMin, meetingEndMin, label, isLinked: !!linkedItem, isDeadlineMarker, isWorkSlot, deadlineHint: (isWorkSlot && linkedItem && linkedItem.deadline === jd) ? (linkedItem.deadlineTime || '') : '', extendsPastView, isDone, channel: linkedItem ? linkedItem.channel : null, kind: t.category==='issue' ? 'issue' : (t.taskType||'todo') });
     });
     // 일정이 없어도 시간표 축은 항상 고정으로 떠 있게 함 (있다없다 왔다갔다 하지 않게)
     return blocks.length ? packTimeGridLanes(blocks, minGapMin) : [];
@@ -3626,22 +3643,26 @@
         const contLineFlag = (isCompact && contArrow) ? `<span class="time-grid-cont-flag" title="${isCutBottom ? '오후 칸으로 이어져요' : '오전 칸에서 이어져 왔어요'}">${contArrow}</span>` : '';
         const kindClass = b.task.starred ? 'time-grid-block-important' : 'time-grid-block-neutral';
         const minutesToLabel = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-        const timeLabel = b.isDeadlineMarker
-          ? `${minutesToLabel(b.startMin)}~${minutesToLabel(b.realEndMin != null ? b.realEndMin : b.endMin)}`
-          : `${normalizeTime(b.task.time)}${b.task.endTime ? '~'+normalizeTime(b.task.endTime) : ''}`;
-        const icon = b.isDeadlineMarker ? '⏰' : (b.isLinked ? '🎯' : (kindIconMap[b.kind] || '📌'));
+        const timeLabel = b.isWorkSlot
+          ? `${minutesToLabel(b.meetingStartMin)}~${minutesToLabel(b.meetingEndMin)}`
+          : (b.isDeadlineMarker
+            ? `${minutesToLabel(b.startMin)}~${minutesToLabel(b.realEndMin != null ? b.realEndMin : b.endMin)}`
+            : `${normalizeTime(b.task.time)}${b.task.endTime ? '~'+normalizeTime(b.task.endTime) : ''}`);
+        const icon = (b.isWorkSlot ? true : b.isDeadlineMarker) ? '⏰' : (b.isLinked ? '🎯' : (kindIconMap[b.kind] || '📌'));
         const durationMin = b.endMin - b.startMin;
         const starHtml = b.task.starred ? `<span class="time-grid-h-block-star" title="중요 표시">★</span>` : '';
-        const deadlineSuffix = b.isDeadlineMarker ? ' 마감' : '';
+        const deadlineSuffix = b.isDeadlineMarker ? ' 마감' : (b.isWorkSlot && b.deadlineHint ? ` · 마감 ${normalizeTime(b.deadlineHint)}` : '');
+        const slotHint = b.isDeadlineMarker ? ' · 끌어서 내 작성 시간을 정할 수 있어요' : (b.isWorkSlot ? ' · 내가 정한 작성 시간(수정 창에서 자동으로 되돌릴 수 있어요)' : '');
         const continues = b.extendsPastView || b.crossesHalf;
         const channelPrefix = b.channel ? `[${b.channel}] ` : '';
         const travelNote = b.travelMin ? ` · 🚗 이동 ${travelLabel(b.travelMin)} (${fmtMinHM(Math.max(0, b.meetingStartMin - b.travelMin))} 출발)${b.returnMin ? ` · 복귀 ${travelLabel(b.returnMin)}` : ' · 직퇴'}` : '';
-        const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(timeLabel)}${travelNote}${deadlineSuffix}${continues ? ' (계속 이어짐)' : ''} ${channelPrefix}${escapeHtml(b.label)}${b.task.notes ? '&#10;' + escapeHtml(b.task.notes).replace(/\n/g, '&#10;') : ''}`;
+        const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(timeLabel)}${travelNote}${deadlineSuffix}${slotHint}${continues ? ' (계속 이어짐)' : ''} ${channelPrefix}${escapeHtml(b.label)}${b.task.notes ? '&#10;' + escapeHtml(b.task.notes).replace(/\n/g, '&#10;') : ''}`;
         // 세로형은 열 전체 폭(또는 레인만큼)을 쓰니까 채널명은 폭 걱정 없이 항상 같이 보여줌
         // 프로모션에 연결된 항목(마감 등)이나 마감리드타임 마커는 시간이 항목 상태에서 자동으로 나오는 거라
         // 드래그로 옮기는 게 의미가 없음 — 직접 만든 할일/미팅만 드래그로 옮기고 늘릴 수 있게 함
-        const draggable = !b.isLinked && !b.isDeadlineMarker;
-        return `<div class="time-grid-v-block ${kindClass} ${(b._depth||0)>0?'is-stacked':''} ${isCutBottom?'is-cut-bottom':''} ${isCutTop?'is-cut-top':''} ${isCompact?'is-compact':''} ${(isShort && !isCompact)?'is-short':''} ${b.isDeadlineMarker?'is-deadline-marker':''} ${b.isDone?'is-done':''} ${draggable?'is-draggable':''}" data-half-start="${half.start}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${blockHeightPx}px;left:calc(${indentPx}px + (100% - ${indentPx}px) * ${b._lane} / ${b._laneCount});width:calc((100% - ${indentPx}px) / ${b._laneCount} - 4px);z-index:${b._z};${pieceTravelMin ? `padding-top:${(isShort ? 2 : 5) + travelPx}px;` : ''}" ${draggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
+        const draggable = !b.isLinked || b.isDeadlineMarker || b.isWorkSlot; // 마감 리마인더 블록도 끌어서 "내 작성 시간"으로 옮길 수 있음
+        const linkedSlotAttrs = (b.isDeadlineMarker || b.isWorkSlot) ? `data-linked-slot="1" data-slot-start="${b.meetingStartMin}" data-slot-end="${b.meetingEndMin}"` : '';
+        return `<div class="time-grid-v-block ${kindClass} ${(b._depth||0)>0?'is-stacked':''} ${isCutBottom?'is-cut-bottom':''} ${isCutTop?'is-cut-top':''} ${isCompact?'is-compact':''} ${(isShort && !isCompact)?'is-short':''} ${b.isDeadlineMarker?'is-deadline-marker':''} ${b.isDone?'is-done':''} ${draggable?'is-draggable':''}" ${linkedSlotAttrs} data-half-start="${half.start}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${blockHeightPx}px;left:calc(${indentPx}px + (100% - ${indentPx}px) * ${b._lane} / ${b._laneCount});width:calc((100% - ${indentPx}px) / ${b._laneCount} - 4px);z-index:${b._z};${pieceTravelMin ? `padding-top:${(isShort ? 2 : 5) + travelPx}px;` : ''}" ${draggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
           ${travelHtml}<div class="time-grid-v-block-line">${b.isDone ? '<span class="time-grid-v-block-check">✓</span>' : `<span class="time-grid-v-block-icon">${icon}</span>`}${b.channel ? `<span class="time-grid-h-block-channel">[${escapeHtml(b.channel)}]</span>` : ''}<span class="time-grid-v-block-label">${escapeHtml(b.label)}</span>${starHtml}${contLineFlag}</div>
           <div class="time-grid-v-block-timeline"><span>${escapeHtml(timeLabel)}${deadlineSuffix}</span>${contFlagText ? `<span class="time-grid-cont-flag">${contFlagText}</span>` : ''}</div>
           ${returnHtml}${draggable ? `<div class="time-grid-v-block-resize" onmousedown="App.startBlockDrag(event, '${b.task.id}', 'resize')" title="드래그해서 길이 조절"></div>` : ''}
@@ -3684,7 +3705,7 @@
   }
   function weekAllDayChipHtml(t, dateStr){
     const linkedItem = t.linkedItemId ? items.find(i => i.id === t.linkedItemId) : null;
-    const label = linkedItem ? (linkedItem.title || linkedItem.content || t.text) : (t.text || '(내용 없음)');
+    const label = linkedItem ? (draftMark(linkedItem) + (linkedItem.title || linkedItem.content || t.text)) : (t.text || '(내용 없음)');
     const carried = !t.recurrence && !!t.createdDate && t.createdDate < dateStr; // 며칠 전에 만들어져 안 끝난 채로 넘어온 업무
     const mark = t.recurrence ? '🔁' : (carried ? '↪' : (linkedItem ? '🎯' : journalTaskKindIcon(t)));
     const note = t.recurrence ? '반복 업무' : (carried ? `${t.createdDate.slice(5).replace('-', '/')}부터 이월` : (linkedItem ? '프로모션 일정' : '시각 미정'));
@@ -3746,20 +3767,23 @@
         const isShort = contentPx < 28;
         const isTight = !isShort && contentPx < 38; // 제목을 두 줄까지 못 쓰는 1시간 안팎 블록은 제목 한 줄 + 시간
         const heightPx = Math.max(realPx, (isShort ? 16 : 28) + travelPx + returnPx);
-        const startLabelW = b.isDeadlineMarker ? `${String(Math.floor(b.startMin/60)).padStart(2,'0')}:${String(b.startMin%60).padStart(2,'0')}` : normalizeTime(b.task.time);
+        const startLabelW = (b.isDeadlineMarker || b.isWorkSlot) ? `${String(Math.floor(b.startMin/60)).padStart(2,'0')}:${String(b.startMin%60).padStart(2,'0')}` : normalizeTime(b.task.time);
         const indentPx = (b._depth || 0) * 6;
         const travelNote = b.travelMin ? ` · 이동 ${travelLabel(b.travelMin)} (${fmtMinHM(Math.max(0, b.meetingStartMin - b.travelMin))} 출발)${b.returnMin ? ` · 복귀 ${travelLabel(b.returnMin)}` : ' · 직퇴'}` : '';
         const travelHtml = pieceTravelMin ? `<div class="time-grid-travel" style="height:${travelPx}px;" title="이동시간 ${travelLabel(b.travelMin)}">${travelPx >= 12 ? `🚗 ${travelLabel(b.travelMin)}` : (travelPx >= 8 ? '🚗' : '')}</div>` : '';
         const kindClass = b.task.starred ? 'time-grid-block-important' : 'time-grid-block-neutral';
-        const icon = b.isDeadlineMarker ? '⏰' : (b.isLinked ? '🎯' : ({todo:'📌',issue:'👀',meeting:'🗣️',proposal:'💡',call:'💡',review:'📌'}[b.kind] || '📌'));
+        const icon = (b.isDeadlineMarker || b.isWorkSlot) ? '⏰' : (b.isLinked ? '🎯' : ({todo:'📌',issue:'👀',meeting:'🗣️',proposal:'💡',call:'💡',review:'📌'}[b.kind] || '📌'));
         const minutesToLabelW = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-        const timeLabel = b.isDeadlineMarker
-          ? `${minutesToLabelW(b.startMin)}~${minutesToLabelW(b.realEndMin != null ? b.realEndMin : b.endMin)}`
-          : `${normalizeTime(b.task.time)}${b.task.endTime ? '~'+normalizeTime(b.task.endTime) : ''}`;
-        const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(b.label)} (${timeLabel}${travelNote})`;
-        const weekDraggable = !b.isLinked && !b.isDeadlineMarker;
+        const timeLabel = b.isWorkSlot
+          ? `${minutesToLabelW(b.meetingStartMin)}~${minutesToLabelW(b.meetingEndMin)}`
+          : (b.isDeadlineMarker
+            ? `${minutesToLabelW(b.startMin)}~${minutesToLabelW(b.realEndMin != null ? b.realEndMin : b.endMin)}`
+            : `${normalizeTime(b.task.time)}${b.task.endTime ? '~'+normalizeTime(b.task.endTime) : ''}`);
+        const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(b.label)} (${timeLabel}${travelNote}${b.isWorkSlot && b.deadlineHint ? ` · 마감 ${normalizeTime(b.deadlineHint)}` : ''})${b.isDeadlineMarker ? ' · 끌어서 내 작성 시간을 정할 수 있어요' : (b.isWorkSlot ? ' · 내가 정한 작성 시간' : '')}`;
+        const weekDraggable = !b.isLinked || b.isDeadlineMarker || b.isWorkSlot;
+        const linkedSlotAttrs = (b.isDeadlineMarker || b.isWorkSlot) ? `data-linked-slot="1" data-slot-start="${b.meetingStartMin}" data-slot-end="${b.meetingEndMin}"` : '';
         const isPast = isToday && b.endMin < nowMinNow;
-        return `<div class="time-grid-week-block ${kindClass} ${(b._depth||0)>0?'is-stacked':''} ${isShort?'is-short':''} ${isTight?'is-tight':''} ${b.isDone?'is-done':''} ${weekDraggable?'is-draggable':''} ${isPast?'is-past':''}" data-half-start="${TIME_GRID_START_MIN}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${heightPx-2}px;left:calc(${indentPx}px + (100% - ${indentPx}px) * ${b._lane} / ${b._laneCount});width:calc((100% - ${indentPx}px) / ${b._laneCount} - 2px);z-index:${b._z};${pieceTravelMin ? `padding-top:${2 + travelPx}px;` : ''}" ${weekDraggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
+        return `<div class="time-grid-week-block ${kindClass} ${(b._depth||0)>0?'is-stacked':''} ${isShort?'is-short':''} ${isTight?'is-tight':''} ${b.isDone?'is-done':''} ${weekDraggable?'is-draggable':''} ${isPast?'is-past':''}" ${linkedSlotAttrs} data-half-start="${TIME_GRID_START_MIN}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${heightPx-2}px;left:calc(${indentPx}px + (100% - ${indentPx}px) * ${b._lane} / ${b._laneCount});width:calc((100% - ${indentPx}px) / ${b._laneCount} - 2px);z-index:${b._z};${pieceTravelMin ? `padding-top:${2 + travelPx}px;` : ''}" ${weekDraggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
           ${travelHtml}<div class="time-grid-week-block-title"><span class="time-grid-week-block-icon">${icon}</span> ${escapeHtml(b.label)}</div>
           <div class="time-grid-week-block-time">${escapeHtml(isShort ? startLabelW : timeLabel)}</div>
           ${returnHtml}${weekDraggable ? `<div class="time-grid-v-block-resize" onmousedown="App.startBlockDrag(event, '${b.task.id}', 'resize')" title="드래그해서 길이 조절"></div>` : ''}
@@ -3810,7 +3834,7 @@
   function journalTaskRowCompactHtml(task, dateStr){
     const done = isTaskDoneOnDate(task, dateStr);
     const linkedItem = task.linkedItemId ? items.find(i => i.id === task.linkedItemId) : null;
-    const label = linkedItem ? (linkedItem.title || linkedItem.content) : (task.text || '(내용 없음)');
+    const label = linkedItem ? (draftMark(linkedItem) + (linkedItem.title || linkedItem.content)) : (task.text || '(내용 없음)');
     const timePrefix = task.time ? `${escapeHtml(task.time)} · ` : '';
     const clickAttr = linkedItem ? ` onclick="App.openEdit('${linkedItem.id}')"` : '';
     const ddayInfo = linkedItem ? journalLinkedDdayInfo(linkedItem, task.linkedType)
@@ -3878,12 +3902,14 @@
   }
   function fmtMinHM(m){ return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
   // 커서 위치에서 가장 가까운 시간표 칸(트랙)을 찾음 — 가로로 겹치는 칸을 우선(오전↔오후 칸, 요일 칸 이동). 시간 눈금 글자 위나 칸 사이 틈에서 놓아도 인식됨
-  function pickDropTrack(x, y){
+  function pickDropTrack(x, y, onlyDate){
     let best = null, bestScore = Infinity;
     document.querySelectorAll('.time-grid-v-track').forEach(el => {
+      if(onlyDate && el.dataset.date !== onlyDate) return; // 마감 리마인더는 같은 날 안에서만 옮김(날짜는 프로모션 마감일 기준)
       const r = el.getBoundingClientRect();
       if(!(r.width > 0) || !(r.height > 0)) return;
-      const dxo = x < r.left ? r.left - x : (x > r.right ? x - r.right : 0);
+      // 날짜가 고정된 드래그(마감 리마인더)는 옆 칸으로 가도 그 날의 칸을 그대로 쓰고 세로 위치(시각)만 반영
+      const dxo = onlyDate ? 0 : (x < r.left ? r.left - x : (x > r.right ? x - r.right : 0));
       const dyo = y < r.top ? r.top - y : (y > r.bottom ? y - r.bottom : 0);
       const score = dxo * 3 + dyo;
       if(score < bestScore){ bestScore = score; best = { el, dxo, dyo }; }
@@ -3930,7 +3956,7 @@
     }
     st.target = null;
     const hide = () => { if(st.indicatorEl) st.indicatorEl.style.display = 'none'; };
-    const pick = pickDropTrack(x, y);
+    const pick = pickDropTrack(x, y, st.linkedSlot ? st.lockDate : null);
     if(!pick){ hide(); return; }
     const trackEl = pick.el;
     const r = trackEl.getBoundingClientRect();
@@ -3992,8 +4018,12 @@
     const blockEl = evt.currentTarget.closest ? evt.currentTarget.closest('.time-grid-v-block, .time-grid-week-block') : evt.target.closest('.time-grid-v-block, .time-grid-week-block');
     if(!blockEl) return;
     const task = journalTasks.find(t => t.id === taskId);
-    const oldStart = task ? timeToMinutes(task.time) : null;
-    const oldEnd = task ? timeToMinutes(task.endTime) : null;
+    // 마감 리마인더(⏰) 블록: 시간이 프로모션 항목에서 자동으로 나오는 거라 task.time이 없음 → 블록에 실린 값(data-slot-*)을 기준으로 삼고,
+    // 끝나면 task.work*(내가 정한 작성 시간)에 저장. 프로모션 자체의 마감 시각은 건드리지 않음
+    const linkedSlot = blockEl.dataset.linkedSlot === '1';
+    const oldStart = linkedSlot ? parseFloat(blockEl.dataset.slotStart) : (task ? timeToMinutes(task.time) : null);
+    const oldEnd = linkedSlot ? parseFloat(blockEl.dataset.slotEnd) : (task ? timeToMinutes(task.endTime) : null);
+    const trackOfBlock = blockEl.closest('.time-grid-v-track');
     const durationMin = (oldStart !== null && oldEnd !== null && oldEnd > oldStart) ? (oldEnd - oldStart) : 30;
     const rect = blockEl.getBoundingClientRect();
     // 14:00 칸 경계에 걸친 일정은 화면에 "조각"으로 그려지니, 조각의 위치/높이가 아니라 일정 자체의 실제 시작·종료 시각을 기준으로 계산해야 함
@@ -4016,7 +4046,8 @@
       blockEl,
       rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
       grabX: evt.clientX - rect.left, grabY: evt.clientY - rect.top,
-      durationMin, travelMin: task ? taskTravelMin(task) : 0, returnMin: task ? taskReturnMin(task) : 0, target: null, ghostEl: null, indicatorEl: null, raf: 0
+      durationMin, linkedSlot, lockDate: linkedSlot && trackOfBlock ? (trackOfBlock.dataset.date || null) : null,
+      travelMin: (task && !linkedSlot) ? taskTravelMin(task) : 0, returnMin: (task && !linkedSlot) ? taskReturnMin(task) : 0, target: null, ghostEl: null, indicatorEl: null, raf: 0
     };
     document.addEventListener('mousemove', onBlockDragMove);
     document.addEventListener('mouseup', onBlockDragEnd);
@@ -4081,15 +4112,28 @@
       const newStartMin = tg.startMin;
       if(!Number.isFinite(newStartMin)){ render(); return; }
       const newEndMin = Math.min(TIME_GRID_END_MIN, newStartMin + st.durationMin);
-      task.time = fmtMinHM(newStartMin);
-      task.endTime = fmtMinHM(newEndMin);
-      // 주간 뷰에서 다른 요일 칸으로 드롭했으면 날짜 자체도 그쪽으로 옮김
-      if(tg.date && tg.date !== task.createdDate){
-        task.createdDate = tg.date;
+      if(st.linkedSlot){
+        task.workDate = st.lockDate;
+        task.workTime = fmtMinHM(newStartMin);
+        task.workEndTime = fmtMinHM(newEndMin);
+      }else{
+        task.time = fmtMinHM(newStartMin);
+        task.endTime = fmtMinHM(newEndMin);
+        // 주간 뷰에서 다른 요일 칸으로 드롭했으면 날짜 자체도 그쪽으로 옮김
+        if(tg.date && tg.date !== task.createdDate){
+          task.createdDate = tg.date;
+        }
       }
     }else{
       if(!Number.isFinite(st.totalMin / st.colHeight)){ render(); return; }
-      task.endTime = fmtMinHM(computeResizeEnd(st, evt.clientY - st.startY));
+      const resizedEnd = computeResizeEnd(st, evt.clientY - st.startY);
+      if(st.linkedSlot){
+        task.workDate = st.lockDate;
+        task.workTime = fmtMinHM(st.trueStartMin);
+        task.workEndTime = fmtMinHM(resizedEnd);
+      }else{
+        task.endTime = fmtMinHM(resizedEnd);
+      }
     }
     persistJournalTasks();
     // 이미 정확한 위치에 스냅되어 있는 상태를 브라우저가 한 번 깨끗하게 그리고 난 다음에
@@ -4184,6 +4228,15 @@
     }
     journalMemoDirty = true;
     render();
+  }
+  // 끌어서 정해둔 "내 작성 시간"을 지우고 자동 배치(마감 시각 2시간 전)로 되돌림
+  function resetWorkSlot(taskId){
+    const t = journalTasks.find(x => x.id === taskId);
+    if(!t) return;
+    delete t.workDate; delete t.workTime; delete t.workEndTime;
+    persistJournalTasks();
+    render();
+    showToast('작성 시간을 자동 배치(마감 2시간 전)로 되돌렸어요');
   }
   function updateJournalTaskTravel(id, value){
     const task = findJournalTaskForEdit(id);
@@ -4377,6 +4430,7 @@
     const item = items.find(i => i.id === itemId);
     if(!item) return;
     item.status = 'submitted';
+    delete item.drafted; // 제출했으니 "작성완료(제출 전)" 표시는 자연히 끝
     if(!item.selection) item.selection = 'pending'; // 빠른 제출완료는 당연히 아직 선정 확인 전이라는 뜻
     ensureSelectionReminder(item);
     persist();
@@ -4598,7 +4652,7 @@
     closeOtherBigPopups('modal');
     modalState = {
       mode:'edit', tab:'manual', editId:id,
-      form:{channel:item.channel, title:item.title||'', period:item.period, content:item.content, deadline:item.deadline, deadlineTime:item.deadlineTime||'', status:item.status||'pending', notes:item.notes||'', coupon:item.coupon||'', needsRecheck:!!item.needsRecheck, setupTasks:(item.setupTasks||[]).map(t=>({id:t.id, label:t.label, done:!!t.done})), setupType:item.setupType||'', setupDeadline:item.setupDeadline||'', selection: item.selection || (item.status==='submitted' ? 'selected' : 'pending'), assignee:item.assignee||'', starred:!!item.starred},
+      form:{channel:item.channel, title:item.title||'', period:item.period, content:item.content, deadline:item.deadline, deadlineTime:item.deadlineTime||'', status:item.status||'pending', drafted:!!item.drafted, notes:item.notes||'', coupon:item.coupon||'', needsRecheck:!!item.needsRecheck, setupTasks:(item.setupTasks||[]).map(t=>({id:t.id, label:t.label, done:!!t.done})), setupType:item.setupType||'', setupDeadline:item.setupDeadline||'', selection: item.selection || (item.status==='submitted' ? 'selected' : 'pending'), assignee:item.assignee||'', starred:!!item.starred},
       pasteText:'', pastedImages:[], parsing:false, parseError:'', detailsExpanded:false
     };
     modalState.initialSig = modalSig();
@@ -5073,6 +5127,8 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
   function updateReviewField(idx, key, value){
     modalState.reviewItems[idx][key] = value;
   }
+  function setFormStatusChoice(value){ applyStatusChoice(modalState.form, value); render(); }
+  function setReviewStatusChoice(idx, value){ applyStatusChoice(modalState.reviewItems[idx], value); render(); }
   function updateReviewFieldAndRender(idx, key, value){
     modalState.reviewItems[idx][key] = value;
     render();
@@ -5139,6 +5195,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         deadline: r.deadline,
         deadlineTime: normalizeTime((r.deadlineTime||'').trim()),
         status: r.status || 'pending',
+        drafted: ((r.status || 'pending') === 'pending' && r.drafted) ? true : undefined,
         selection: (r.status === 'submitted') ? (r.selection || 'pending') : undefined,
         notes: (r.notes||'').trim(),
         coupon: (r.coupon||'').trim(),
@@ -5210,6 +5267,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         deadline: f.deadline,
         deadlineTime: normalizeTime((f.deadlineTime||'').trim()),
         status: f.status || 'pending',
+        drafted: ((f.status || 'pending') === 'pending' && f.drafted) ? true : undefined,
         selection: (f.status === 'submitted') ? (f.selection || 'pending') : undefined,
         notes: (f.notes||'').trim(),
         coupon: (f.coupon||'').trim(),
@@ -5263,6 +5321,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
         item.deadline = f.deadline;
         item.deadlineTime = normalizeTime((f.deadlineTime||'').trim());
         item.status = f.status || 'pending';
+        if(item.status === 'pending' && f.drafted) item.drafted = true; else delete item.drafted;
         item.selection = newSelection;
         item.notes = (f.notes||'').trim();
         item.coupon = (f.coupon||'').trim();
@@ -5466,6 +5525,16 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
   // - 새로 '제출완료'로 바뀌는 순간엔 '선정 대기'로 시작 (세팅 준비 자동 시작은 '선정됨'부터)
   // - 이미 제출완료였는데 선정여부가 없던 기존 데이터(이 기능 추가 전)는 그대로 둬서 하위호환 유지
   // - 제출완료가 아닌 상태로 바뀌면 선정여부는 의미 없어지므로 비움
+  // "✍️ 작성완료"(제안서는 다 썼고 제출만 남은 상태)는 새 상태값이 아니라 "대기중"에 붙는 표시(drafted)예요.
+  // 그래서 마감일·이번주 마감·지난 마감 미완료·마감 리마인더 같은 기존 집계는 전부 그대로 "제출 전"으로 잡혀요.
+  // 선택지(value)로만 'drafted'를 쓰고, 저장은 status:'pending' + drafted:true
+  function applyStatusChoice(obj, choice){
+    if(choice === 'drafted'){ obj.status = 'pending'; obj.drafted = true; }
+    else{ obj.status = choice; delete obj.drafted; }
+  }
+  function statusChoiceOf(obj){ return ((obj.status || 'pending') === 'pending' && obj.drafted) ? 'drafted' : (obj.status || 'pending'); }
+  function isDraftedItem(item){ return !!item && (item.status || 'pending') === 'pending' && !!item.drafted; }
+  function draftMark(item){ return isDraftedItem(item) ? '✍️ ' : ''; }
   function computeSelectionForStatus(prevStatus, newStatus, prevSelection){
     if(newStatus !== 'submitted') return undefined;
     if(prevStatus === 'submitted') return prevSelection; // 이미 있던 값(레거시 undefined 포함) 그대로 유지
@@ -5475,8 +5544,8 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     const item = items.find(i=>i.id===id);
     if(!item) return;
     item.selection = computeSelectionForStatus(item.status, status, item.selection);
-    item.status = status;
-    if(status !== 'pending' && item.needsRecheck) item.needsRecheck = false; // 완료 처리되면 재확인 필요 플래그도 자동 해제
+    applyStatusChoice(item, status);
+    if(status !== 'pending' && status !== 'drafted' && item.needsRecheck) item.needsRecheck = false; // 완료 처리되면 재확인 필요 플래그도 자동 해제
     persist();
     render();
   }
@@ -5579,7 +5648,8 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     function statusSelect(item){
       return `
         <select class="status-select" onchange="App.setStatus('${item.id}', this.value)">
-          <option value="pending" ${(!item.status||item.status==='pending')?'selected':''}>대기중</option>
+          <option value="pending" ${((!item.status||item.status==='pending') && !item.drafted)?'selected':''}>대기중</option>
+          <option value="drafted" ${isDraftedItem(item)?'selected':''}>✍️ 작성완료 (제출 전)</option>
           <option value="submitted" ${item.status==='submitted'?'selected':''}>제출완료</option>
           <option value="na" ${item.status==='na'?'selected':''}>해당없음</option>
           <option value="missed" ${item.status==='missed'?'selected':''}>미제출</option>
@@ -5600,6 +5670,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
       if(item.status === 'submitted' && item.selection === 'pending'){
         return `<span class="status-badge status-badge-pending">선정대기</span>`;
       }
+      if(isDraftedItem(item)) return `<span class="status-badge status-badge-drafted" title="제안서는 다 썼고 제출만 남았어요">✍️ 작성완료</span>`;
       return item.status === 'submitted'
         ? `<span class="status-badge status-badge-submitted">참여</span>`
         : `<span class="status-badge status-badge-unjoined">미참여</span>`;
@@ -6215,6 +6286,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
               <button class="bulk-btn bulk-btn-na" onclick="App.bulkSetStatus('na')">해당없음</button>
               <button class="bulk-btn bulk-btn-missed" onclick="App.bulkSetStatus('missed')">미제출</button>
               <button class="bulk-btn bulk-btn-pending" onclick="App.bulkSetStatus('pending')">대기중</button>
+              <button class="bulk-btn bulk-btn-pending" onclick="App.bulkSetStatus('drafted')" title="제안서는 다 썼고 제출만 남은 상태(마감은 그대로 제출 전으로 집계돼요)">✍️ 작성완료</button>
               <span class="bulk-sep"></span>
               <button class="bulk-btn bulk-btn-delete" onclick="App.bulkDelete()">🗑 삭제</button>
               <button class="bulk-btn bulk-btn-clear" onclick="App.clearSelection()">해제</button>
@@ -6494,7 +6566,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
           <div class="journal-list">
             ${matched.length ? matched.map(t => {
               const linkedItem = t.linkedItemId ? items.find(i => i.id === t.linkedItemId) : null;
-              const label = linkedItem ? (linkedItem.title || linkedItem.content) : (t.text || '(내용 없음)');
+              const label = linkedItem ? (draftMark(linkedItem) + (linkedItem.title || linkedItem.content)) : (t.text || '(내용 없음)');
               const catLabel = t.category==='issue' ? '팔로우업' : '할일';
               const typePillLabel = (!linkedItem && t.category!=='issue' && t.taskType && t.taskType!=='todo')
                 ? (t.taskType==='meeting'?'🗣️ 미팅':t.taskType==='proposal'?'💡 제안':t.taskType==='call'?'💡 제안':'') : '';
@@ -6811,8 +6883,9 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
               <input type="text" class="review-input" style="margin-top:6px;" value="${escapeHtml(r.period)}" placeholder="진행 기간 (예: 8/20~8/31)" oninput="App.updateReviewField(${idx},'period',this.value)" />
               <input type="text" class="review-input" style="margin-top:6px;" value="${escapeHtml(r.coupon||'')}" placeholder="쿠폰/할인율 정보" oninput="App.updateReviewField(${idx},'coupon',this.value)" />
               <input type="text" class="review-input" style="margin-top:6px;" value="${escapeHtml(r.notes||'')}" placeholder="비고 (참여상품 한정, 필수요건 등)" oninput="App.updateReviewField(${idx},'notes',this.value)" />
-              <select class="review-input" style="margin-top:6px;" onchange="App.updateReviewFieldAndRender(${idx},'status',this.value)">
-                <option value="pending" ${r.status==='pending'?'selected':''}>대기중</option>
+              <select class="review-input" style="margin-top:6px;" onchange="App.setReviewStatusChoice(${idx},this.value)">
+                <option value="pending" ${statusChoiceOf(r)==='pending'?'selected':''}>대기중</option>
+                <option value="drafted" ${statusChoiceOf(r)==='drafted'?'selected':''}>✍️ 작성완료 (제출 전)</option>
                 <option value="submitted" ${r.status==='submitted'?'selected':''}>제출완료</option>
                 <option value="na" ${r.status==='na'?'selected':''}>해당없음</option>
                 <option value="missed" ${r.status==='missed'?'selected':''}>미제출</option>
@@ -6952,10 +7025,19 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
               <input type="text" value="${escapeHtml(f.deadlineTime||'')}" placeholder="예: 13:00" oninput="App.updateField('deadlineTime', this.value)" />
             </div>
           </div>
+          ${(modalState.mode === 'edit' && modalState.editId) ? (() => {
+            const slotTask = journalTasks.find(t => t.linkedItemId === modalState.editId && t.workTime && t.workDate);
+            if(!slotTask) return '';
+            return `<div class="field" style="margin-top:-4px;">
+              <div class="hint" style="margin:0;">⏰ 내가 정한 작성 시간: <b>${escapeHtml(holidayShortDate(slotTask.workDate))} ${escapeHtml(normalizeTime(slotTask.workTime))}~${escapeHtml(normalizeTime(slotTask.workEndTime || ''))}</b>
+                <span class="section-label-action" onclick="App.resetWorkSlot('${slotTask.id}')">↺ 마감 2시간 전(자동)으로 되돌리기</span></div>
+            </div>`;
+          })() : ''}
           <div class="field">
             <label>상태</label>
-            <select onchange="App.updateFieldAndRender('status', this.value)">
-              <option value="pending" ${f.status==='pending'?'selected':''}>대기중</option>
+            <select onchange="App.setFormStatusChoice(this.value)">
+              <option value="pending" ${(statusChoiceOf(f)==='pending')?'selected':''}>대기중</option>
+              <option value="drafted" ${(statusChoiceOf(f)==='drafted')?'selected':''}>✍️ 작성완료 (제출 전)</option>
               <option value="submitted" ${f.status==='submitted'?'selected':''}>제출완료</option>
               <option value="na" ${f.status==='na'?'selected':''}>해당없음</option>
               <option value="missed" ${f.status==='missed'?'selected':''}>미제출</option>
@@ -7168,7 +7250,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
               <table class="report-table report-table-detail">
                 <thead><tr><th>채널</th><th>제목</th><th>마감일</th><th>상태</th><th>선정여부</th><th>담당자</th></tr></thead>
                 <tbody>
-                  ${monthItems.map(it => `<tr><td>${escapeHtml(it.channel||'')}</td><td>${escapeHtml(it.title||it.content||'')}</td><td>${escapeHtml(it.deadline||'')}</td><td>${statusLabelR(it.status)}</td><td>${selectionLabelR(it)}</td><td>${escapeHtml(it.assignee||'')}</td></tr>`).join('')}
+                  ${monthItems.map(it => `<tr><td>${escapeHtml(it.channel||'')}</td><td>${escapeHtml(it.title||it.content||'')}</td><td>${escapeHtml(it.deadline||'')}</td><td>${isDraftedItem(it) ? '작성완료(제출 전)' : statusLabelR(it.status)}</td><td>${selectionLabelR(it)}</td><td>${escapeHtml(it.assignee||'')}</td></tr>`).join('')}
                 </tbody>
               </table>
               ` : `<p class="hint">이번달 마감인 프로모션이 없어요.</p>`}
@@ -7642,6 +7724,8 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     saveForm,
     updateReviewField,
     updateReviewFieldAndRender,
+    setFormStatusChoice,
+    setReviewStatusChoice,
     removeReviewItem,
     addReviewRow,
     addReviewTaskRow,
@@ -7717,6 +7801,7 @@ JSON 배열만 출력 (예: [{"kind":"promotion","channel":"...","title":"...","
     setJournalTaskKind,
     updateJournalTaskTime,
     updateJournalTaskTravel,
+    resetWorkSlot,
     updateJournalTaskReturnMode,
     convertLeadToTravel,
     updateJournalTaskEndTime,
