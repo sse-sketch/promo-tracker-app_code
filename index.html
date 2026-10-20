@@ -497,6 +497,18 @@
   .time-grid-week-col.is-leave{border-top:3px solid var(--leave);border-radius:8px 8px 0 0;}
   .time-grid-week-col.is-leave .time-grid-week-day-label{background:var(--leave-soft);color:var(--leave);font-weight:800;margin-top:-1px;}
   .time-grid-week-col.is-leave .time-grid-v-track{background:rgba(109,91,176,0.06);}
+  /* 주별 "시각 미정" 띠 */
+  .time-grid-week-allday{display:flex;flex-direction:column;gap:2px;padding:4px 0;box-sizing:border-box;}
+  .time-grid-week-allday-gutter{position:absolute;left:0;width:100%;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;box-sizing:border-box;font-size:8.5px;line-height:1.15;text-align:right;color:var(--ink-faint);font-weight:700;}
+  .time-grid-week-chip{display:flex;align-items:center;gap:3px;height:16px;padding:0 5px;box-sizing:border-box;border-radius:4px;background:var(--surface-2);border:1px solid var(--line);font-size:9.5px;font-weight:600;color:var(--ink);cursor:pointer;overflow:hidden;white-space:nowrap;}
+  .time-grid-week-chip:hover{border-color:var(--ink-faint);}
+  .time-grid-week-chip-mark{flex:0 0 auto;font-size:9px;line-height:1;}
+  .time-grid-week-chip-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+  .time-grid-week-chip.is-important{background:var(--urgent-soft);border-color:rgba(175,74,65,0.28);color:var(--urgent);}
+  .time-grid-week-chip.is-carried{border-style:dashed;}
+  .time-grid-week-chip.is-recurring{background:rgba(75,122,98,0.10);border-color:rgba(75,122,98,0.28);}
+  .time-grid-week-chip-more{justify-content:center;background:none;border-color:transparent;color:var(--ink-faint);font-weight:700;}
+  .time-grid-week-col.is-dayoff .time-grid-week-chip{opacity:0.7;}
   .time-grid-week-col.is-today .time-grid-week-day-label{color:var(--brand);font-weight:800;}
   .time-grid-week-col:not(.is-today) .time-grid-week-block{opacity:0.45;}
   .time-grid-week-block.is-past{opacity:0.4;}
@@ -545,7 +557,16 @@
   body.is-dragging-block, body.is-dragging-block *{cursor:grabbing !important;user-select:none !important;}
   body.is-resizing-block, body.is-resizing-block *{cursor:ns-resize !important;user-select:none !important;}
   .block-resize-tip{position:fixed;z-index:1001;pointer-events:none;background:var(--ink);color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;white-space:nowrap;box-shadow:0 8px 18px -6px rgba(35,46,41,0.5);}
-  .time-grid-v-block.is-compact .time-grid-v-block-resize{height:6px;bottom:-1px;}
+  .time-grid-v-block.is-compact .time-grid-v-block-resize,.time-grid-v-block.is-short .time-grid-v-block-resize{height:6px;bottom:-1px;}
+  /* 짧은 블록: 제목 · 시간을 한 줄로 (일별: 제목 왼쪽, 시간 오른쪽 / 주별: 시작 시각이 제목 앞) */
+  .time-grid-v-block.is-short{display:flex;align-items:center;gap:8px;padding:2px 8px;}
+  .time-grid-v-block.is-short .time-grid-v-block-line{flex:1 1 auto;min-width:0;width:auto;}
+  .time-grid-v-block.is-short .time-grid-v-block-timeline{flex:0 0 auto;width:auto;margin-top:0;}
+  .time-grid-week-block.is-short{display:flex;align-items:center;gap:4px;padding-top:0;padding-bottom:0;}
+  .time-grid-week-block.is-short .time-grid-week-block-title{flex:1 1 auto;min-width:0;-webkit-line-clamp:1;}
+  .time-grid-week-block.is-short .time-grid-week-block-time{order:-1;flex:0 0 auto;}
+  .time-grid-week-block.is-tight .time-grid-week-block-title{-webkit-line-clamp:1;}
+  .time-grid-week-block.is-short .time-grid-v-block-resize{height:5px;bottom:-1px;}
   /* 14:00 칸 경계에 걸친 일정 — 양쪽 조각이 "잘려서 이어지는 한 일정"으로 읽히게: 잘린 쪽은 모서리를 각지게 + 점선 절단면 */
   .time-grid-v-block.is-cut-bottom{border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:2px dashed rgba(35,46,41,0.28);}
   .time-grid-v-block.is-cut-top{border-top-left-radius:0;border-top-right-radius:0;border-top:2px dashed rgba(35,46,41,0.28);}
@@ -999,7 +1020,7 @@
 
 <script>
 (function(){
-  const APP_BUILD = '2026.10.07-p'; // 화면에 떠 있는 게 최신 파일인지 확인하는 용도 (⋯ 메뉴 맨 아래에 표시) — 고칠 때마다 올림
+  const APP_BUILD = '2026.10.07-r'; // 화면에 떠 있는 게 최신 파일인지 확인하는 용도 (⋯ 메뉴 맨 아래에 표시) — 고칠 때마다 올림
   const STORAGE_KEY = 'promo-tracker-items';
   const CHANNELS_KEY = 'promo-tracker-channels';
   const CHANNELS_ENDED_KEY = 'promo-tracker-channels-ended';
@@ -3581,17 +3602,19 @@
         const isCut = isCutBottom || isCutTop;
         let topPx = ((b.startMin - half.start) / totalMin) * colHeight;
         const actualPx = ((b.endMin - b.startMin) / totalMin) * colHeight;
-        // 2줄(제목+시간)이 들어가야 해서 최소 높이를 넉넉하게(32px). 다만 아래 두 경우엔 한 줄(compact)만 보여줌:
-        //  · 칸 경계에서 잘린 짧은 조각  · 칸 맨 끝(예: 13:30 이후)이라 32px을 주면 칸 밖으로 삐져나가는 짧은 일정
-        let isCompact = false, minH = 32;
-        if(isCut && actualPx < 30){ isCompact = true; minH = 20; }
-        else if(!isCut && topPx + Math.max(actualPx, 32) > colHeight){ isCompact = true; minH = 18; }
-        // 이동시간 빗금 구간(블록 맨 위) — 이 조각에 실제로 보이는 만큼만
+        // 이동시간 구간(블록 맨 위/맨 아래 띠) — 이 조각에 실제로 보이는 만큼만
         const pieceTravelMin = b.travelMin ? Math.max(0, Math.min(b.meetingStartMin, b.endMin) - Math.max(b.meetingStartMin - b.travelMin, b.startMin)) : 0;
         const pieceReturnMin = b.returnMin ? Math.max(0, Math.min(b.meetingEndMin + b.returnMin, b.endMin) - Math.max(b.meetingEndMin, b.startMin)) : 0;
         const travelPx = pieceTravelMin * (HOUR_PX_V / 60);
         const returnPx = pieceReturnMin * (HOUR_PX_V / 60);
-        if((pieceTravelMin || pieceReturnMin) && !isCompact) minH = Math.max(minH, 32 + travelPx + returnPx); // 빗금 구간 + 제목/시간 두 줄이 다 들어갈 높이
+        // 길이는 실제 시간 비율 그대로. 제목+시간 두 줄이 안 들어갈 만큼 짧은 블록(내용 영역 30px 미만 ≈ 53분 미만)은
+        // 억지로 늘리지 않고 "제목 · 시간"을 한 줄(is-short)로 그림 — 예전엔 최소 높이 때문에 30분 일정이 거의 1시간처럼 보였음
+        const isShort = (actualPx - travelPx - returnPx) < 30;
+        // 아래 두 경우엔 시간 줄을 아예 숨기는 compact: · 칸 경계에서 잘린 짧은 조각  · 칸 맨 끝이라 칸 밖으로 삐져나가는 짧은 일정
+        let isCompact = false, minH = isShort ? 18 : 32;
+        if(isCut && actualPx < 30){ isCompact = true; minH = 20; }
+        else if(!isCut && topPx + Math.max(actualPx, minH) > colHeight){ isCompact = true; minH = 18; }
+        if((pieceTravelMin || pieceReturnMin) && !isCompact) minH = Math.max(minH, (isShort ? 18 : 32) + travelPx + returnPx); // 이동 띠 + 내용이 다 들어갈 높이
         const heightPx = Math.max(actualPx, minH);
         if(topPx + heightPx > colHeight) topPx = colHeight - heightPx;  // 어떤 경우에도 칸 밖으로 안 나가게
         const blockHeightPx = isCutBottom ? heightPx : heightPx - 3;     // 잘린 아래쪽은 경계에 붙이고, 나머지는 3px 띄움
@@ -3618,7 +3641,7 @@
         // 프로모션에 연결된 항목(마감 등)이나 마감리드타임 마커는 시간이 항목 상태에서 자동으로 나오는 거라
         // 드래그로 옮기는 게 의미가 없음 — 직접 만든 할일/미팅만 드래그로 옮기고 늘릴 수 있게 함
         const draggable = !b.isLinked && !b.isDeadlineMarker;
-        return `<div class="time-grid-v-block ${kindClass} ${(b._depth||0)>0?'is-stacked':''} ${isCutBottom?'is-cut-bottom':''} ${isCutTop?'is-cut-top':''} ${isCompact?'is-compact':''} ${b.isDeadlineMarker?'is-deadline-marker':''} ${b.isDone?'is-done':''} ${draggable?'is-draggable':''}" data-half-start="${half.start}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${blockHeightPx}px;left:calc(${indentPx}px + (100% - ${indentPx}px) * ${b._lane} / ${b._laneCount});width:calc((100% - ${indentPx}px) / ${b._laneCount} - 4px);z-index:${b._z};${pieceTravelMin ? `padding-top:${5 + travelPx}px;` : ''}" ${draggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
+        return `<div class="time-grid-v-block ${kindClass} ${(b._depth||0)>0?'is-stacked':''} ${isCutBottom?'is-cut-bottom':''} ${isCutTop?'is-cut-top':''} ${isCompact?'is-compact':''} ${(isShort && !isCompact)?'is-short':''} ${b.isDeadlineMarker?'is-deadline-marker':''} ${b.isDone?'is-done':''} ${draggable?'is-draggable':''}" data-half-start="${half.start}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${blockHeightPx}px;left:calc(${indentPx}px + (100% - ${indentPx}px) * ${b._lane} / ${b._laneCount});width:calc((100% - ${indentPx}px) / ${b._laneCount} - 4px);z-index:${b._z};${pieceTravelMin ? `padding-top:${(isShort ? 2 : 5) + travelPx}px;` : ''}" ${draggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
           ${travelHtml}<div class="time-grid-v-block-line">${b.isDone ? '<span class="time-grid-v-block-check">✓</span>' : `<span class="time-grid-v-block-icon">${icon}</span>`}${b.channel ? `<span class="time-grid-h-block-channel">[${escapeHtml(b.channel)}]</span>` : ''}<span class="time-grid-v-block-label">${escapeHtml(b.label)}</span>${starHtml}${contLineFlag}</div>
           <div class="time-grid-v-block-timeline"><span>${escapeHtml(timeLabel)}${deadlineSuffix}</span>${contFlagText ? `<span class="time-grid-cont-flag">${contFlagText}</span>` : ''}</div>
           ${returnHtml}${draggable ? `<div class="time-grid-v-block-resize" onmousedown="App.startBlockDrag(event, '${b.task.id}', 'resize')" title="드래그해서 길이 조절"></div>` : ''}
@@ -3652,6 +3675,22 @@
       </div>
     `;
   }
+  // 주별 시간표 맨 위 "시각 미정" 띠 — 시각이 없어서 시간표 블록으로는 못 그리는 업무(이월되는 할일, 매일/매주 반복 업무,
+  // 프로모션 연결 리마인더 등)를 요일별로 보여줌. 예전엔 일별 화면으로 가거나 아래 "이번주 목록"을 펼쳐야만 보였음
+  function weekAllDayTasks(dateStr){
+    return [...tasksForDate(dateStr, 'todo'), ...tasksForDate(dateStr, 'issue')]
+      .filter(t => timeToMinutes(t.time) === null)
+      .sort((a, b) => (b.starred ? 1 : 0) - (a.starred ? 1 : 0)); // ⭐중요한 건 위로
+  }
+  function weekAllDayChipHtml(t, dateStr){
+    const linkedItem = t.linkedItemId ? items.find(i => i.id === t.linkedItemId) : null;
+    const label = linkedItem ? (linkedItem.title || linkedItem.content || t.text) : (t.text || '(내용 없음)');
+    const carried = !t.recurrence && !!t.createdDate && t.createdDate < dateStr; // 며칠 전에 만들어져 안 끝난 채로 넘어온 업무
+    const mark = t.recurrence ? '🔁' : (carried ? '↪' : (linkedItem ? '🎯' : journalTaskKindIcon(t)));
+    const note = t.recurrence ? '반복 업무' : (carried ? `${t.createdDate.slice(5).replace('-', '/')}부터 이월` : (linkedItem ? '프로모션 일정' : '시각 미정'));
+    const action = linkedItem ? `App.openEdit('${linkedItem.id}')` : `App.openTaskMemo('${t.id}')`;
+    return `<div class="time-grid-week-chip ${t.starred ? 'is-important' : ''} ${carried ? 'is-carried' : ''} ${t.recurrence ? 'is-recurring' : ''}" onclick="${action}" title="${escapeHtml(label)} — ${escapeHtml(note)}"><span class="time-grid-week-chip-mark">${mark}</span><span class="time-grid-week-chip-text">${escapeHtml(label)}</span></div>`;
+  }
   function renderWeekTimeGrid(weekAnchor){
     const HOUR_PX_W = 30; // 7칸이라 일간보다 살짝 촘촘하게
     const totalMin = TIME_GRID_END_MIN - TIME_GRID_START_MIN;
@@ -3669,6 +3708,18 @@
     const todayStr = todayISO();
     const nowMinNow = new Date().getHours()*60 + new Date().getMinutes();
     const dayLabelHeight = 52; // 요일마다 다르게 계산하지 않고 항상 이 높이로 통일 — 공휴일 유무는 색으로만 구분함
+    const ALLDAY_MAX_CHIPS = 3, ALLDAY_CHIP_H = 16, ALLDAY_GAP = 2;
+    const allDayByDate = {};
+    let allDayRows = 0;
+    for(let i = 0; i < 7; i++){
+      const d0 = new Date(weekAnchor.getFullYear(), weekAnchor.getMonth(), weekAnchor.getDate()+i);
+      if(!journalWeekShowWeekends && (d0.getDay() === 0 || d0.getDay() === 6)) continue;
+      const ds0 = toISO(d0);
+      allDayByDate[ds0] = weekAllDayTasks(ds0);
+      allDayRows = Math.max(allDayRows, Math.min(allDayByDate[ds0].length, ALLDAY_MAX_CHIPS));
+    }
+    // 어느 요일에도 시각 미정 업무가 없으면 띠 자체를 안 그림(높이 0) — 예전 모양 그대로
+    const allDayHeight = allDayRows ? (allDayRows * ALLDAY_CHIP_H + (allDayRows - 1) * ALLDAY_GAP + 8) : 0;
     const dayColsHtml = [];
     for(let i = 0; i < 7; i++){
       const d = new Date(weekAnchor.getFullYear(), weekAnchor.getMonth(), weekAnchor.getDate()+i);
@@ -3689,7 +3740,13 @@
         const travelPx = pieceTravelMin * (HOUR_PX_W / 60);
         const returnPx = pieceReturnMin * (HOUR_PX_W / 60);
         const returnHtml = pieceReturnMin ? `<div class="time-grid-travel is-return" style="height:${returnPx}px;" title="복귀 ${travelLabel(b.returnMin)}">${returnPx >= 12 ? `🚗 복귀 ${travelLabel(b.returnMin)}` : (returnPx >= 8 ? '🚗' : '')}</div>` : '';
-        const heightPx = Math.max(((b.endMin - b.startMin) / totalMin) * colHeight, 40 + travelPx + returnPx);
+        // 길이는 실제 시간 비율 그대로. 제목+시간 두 줄(≈28px)이 안 들어가는 짧은 블록은 "09:00 제목" 한 줄(is-short)로 — 예전엔 최소 40px(≈1시간 20분)로 늘려서 30분 일정이 1시간 넘게 보였음
+        const realPx = ((b.endMin - b.startMin) / totalMin) * colHeight;
+        const contentPx = realPx - travelPx - returnPx;
+        const isShort = contentPx < 28;
+        const isTight = !isShort && contentPx < 38; // 제목을 두 줄까지 못 쓰는 1시간 안팎 블록은 제목 한 줄 + 시간
+        const heightPx = Math.max(realPx, (isShort ? 16 : 28) + travelPx + returnPx);
+        const startLabelW = b.isDeadlineMarker ? `${String(Math.floor(b.startMin/60)).padStart(2,'0')}:${String(b.startMin%60).padStart(2,'0')}` : normalizeTime(b.task.time);
         const indentPx = (b._depth || 0) * 6;
         const travelNote = b.travelMin ? ` · 이동 ${travelLabel(b.travelMin)} (${fmtMinHM(Math.max(0, b.meetingStartMin - b.travelMin))} 출발)${b.returnMin ? ` · 복귀 ${travelLabel(b.returnMin)}` : ' · 직퇴'}` : '';
         const travelHtml = pieceTravelMin ? `<div class="time-grid-travel" style="height:${travelPx}px;" title="이동시간 ${travelLabel(b.travelMin)}">${travelPx >= 12 ? `🚗 ${travelLabel(b.travelMin)}` : (travelPx >= 8 ? '🚗' : '')}</div>` : '';
@@ -3702,9 +3759,9 @@
         const fullTitle = `${b.task.starred ? '★ ' : ''}${escapeHtml(b.label)} (${timeLabel}${travelNote})`;
         const weekDraggable = !b.isLinked && !b.isDeadlineMarker;
         const isPast = isToday && b.endMin < nowMinNow;
-        return `<div class="time-grid-week-block ${kindClass} ${(b._depth||0)>0?'is-stacked':''} ${b.isDone?'is-done':''} ${weekDraggable?'is-draggable':''} ${isPast?'is-past':''}" data-half-start="${TIME_GRID_START_MIN}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${heightPx-2}px;left:calc(${indentPx}px + (100% - ${indentPx}px) * ${b._lane} / ${b._laneCount});width:calc((100% - ${indentPx}px) / ${b._laneCount} - 2px);z-index:${b._z};${pieceTravelMin ? `padding-top:${2 + travelPx}px;` : ''}" ${weekDraggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
+        return `<div class="time-grid-week-block ${kindClass} ${(b._depth||0)>0?'is-stacked':''} ${isShort?'is-short':''} ${isTight?'is-tight':''} ${b.isDone?'is-done':''} ${weekDraggable?'is-draggable':''} ${isPast?'is-past':''}" data-half-start="${TIME_GRID_START_MIN}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="top:${topPx}px;height:${heightPx-2}px;left:calc(${indentPx}px + (100% - ${indentPx}px) * ${b._lane} / ${b._laneCount});width:calc((100% - ${indentPx}px) / ${b._laneCount} - 2px);z-index:${b._z};${pieceTravelMin ? `padding-top:${2 + travelPx}px;` : ''}" ${weekDraggable?`onmousedown="App.startBlockDrag(event, '${b.task.id}', 'move')"`:''} onclick="if(App.wasBlockDragged())return; ${b.isLinked ? `App.openEdit('${b.task.linkedItemId}')` : `App.openTaskMemo('${b.task.id}')`}" title="${fullTitle}">
           ${travelHtml}<div class="time-grid-week-block-title"><span class="time-grid-week-block-icon">${icon}</span> ${escapeHtml(b.label)}</div>
-          <div class="time-grid-week-block-time">${escapeHtml(timeLabel)}</div>
+          <div class="time-grid-week-block-time">${escapeHtml(isShort ? startLabelW : timeLabel)}</div>
           ${returnHtml}${weekDraggable ? `<div class="time-grid-v-block-resize" onmousedown="App.startBlockDrag(event, '${b.task.id}', 'resize')" title="드래그해서 길이 조절"></div>` : ''}
         </div>`;
       }).join('');
@@ -3724,13 +3781,19 @@
       dayColsHtml.push(`
         <div class="time-grid-week-col ${isToday?'is-today':''} ${isWeekendCol?'is-weekend':''} ${holidayClass(holidayColInfo)} ${dayoffClass}">
           <div class="time-grid-week-day-label ${dowLabelClass}" style="height:${dayLabelHeight}px;" onclick="App.journalGoToDate('${dateStr}')" title="${isHolidayCol ? escapeHtml(holidayColInfo.label) + ' — ' : ''}이 날 일별로 보기">${dowNames[d.getDay()]}<span class="time-grid-week-day-num">${d.getDate()}</span>${isHolidayCol ? `<span class="time-grid-week-holiday-icon">${escapeHtml(holidayColInfo.label)}</span>` : ''}</div>
+          ${allDayHeight ? (() => {
+            const list = allDayByDate[dateStr] || [];
+            const shown = list.length > ALLDAY_MAX_CHIPS ? list.slice(0, ALLDAY_MAX_CHIPS - 1) : list; // 넘치면 마지막 줄을 "+N건"으로
+            const more = list.length - shown.length;
+            return `<div class="time-grid-week-allday" style="height:${allDayHeight}px;">${shown.map(t => weekAllDayChipHtml(t, dateStr)).join('')}${more > 0 ? `<div class="time-grid-week-chip time-grid-week-chip-more" onclick="App.journalGoToDate('${dateStr}')" title="이 날 일별로 보기">+${more}건 더</div>` : ''}</div>`;
+          })() : ''}
           <div class="time-grid-v-track" data-date="${dateStr}" data-half-start="${TIME_GRID_START_MIN}" data-total-min="${totalMin}" data-col-height="${colHeight}" style="height:${colHeight}px;">${offHoursHtml}${halfDayBandHtml}${lunchHtml}${nowLineHtml}${eventsHtml}</div>
         </div>
       `);
     }
     return `
       <div class="time-grid-week-wrap">
-        <div class="time-grid-week-hours" style="height:${colHeight}px;margin-top:${dayLabelHeight}px;">${hourLabelsHtml}</div>
+        <div class="time-grid-week-hours" style="height:${colHeight}px;margin-top:${dayLabelHeight + allDayHeight}px;">${allDayHeight ? `<span class="time-grid-week-allday-gutter" style="top:-${allDayHeight}px;height:${allDayHeight}px;">시각<br>미정</span>` : ''}${hourLabelsHtml}</div>
         <div class="time-grid-week-cols">${dayColsHtml.join('')}</div>
       </div>
     `;
@@ -3912,7 +3975,7 @@
     const pxPerMin = st.colHeight / st.totalMin;
     let h = (Math.min(newEnd + (st.returnMin || 0), halfEnd) - st.pieceStartMin) * pxPerMin;
     if(Number.isFinite(h)){
-      h = Math.max(20, Math.min(h, st.colHeight - st.startTop));
+      h = Math.max(14, Math.min(h, st.colHeight - st.startTop));
       st.blockEl.style.height = h + 'px';
     }
     if(st.tipEl){
